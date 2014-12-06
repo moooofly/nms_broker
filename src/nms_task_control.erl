@@ -165,7 +165,7 @@ to_warning_code(EventID) when is_binary(EventID) ->
     end,
     Code;
 to_warning_code(_) ->
-    io:format("[nms_task_control] EventID must be of binary type!~n", []).
+    lager:warning("[nms_task_control] EventID must be of binary type!").
 
 to_description(Code) when is_integer(Code) ->
     Desc = case Code of
@@ -178,7 +178,7 @@ to_description(Code) when is_integer(Code) ->
     end,
     Desc;
 to_description(_) ->
-    io:format("[nms_task_control] Code must be of interger type!~n", []).
+    lager:warning("[nms_task_control] Code must be of interger type!").
 
 
 
@@ -222,23 +222,23 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
     %% 判定当前上报信息是否触发告警
     case WarningTriggered of
         true -> %% 触发告警            
-            io:format("[nms_task_control] recv ~p and trigger ~p~n", [EventID,CodeDesc]),
+            lager:notice("[nms_task_control] recv ~p and trigger ~p~n", [EventID,CodeDesc]),
 
             case WarningItem of
                 {exist, _} ->
                     %% 若 warning_unrepaired 表中已经存在对应条目，则不用对该表做变更
-                    io:format("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
-                        warning ALREADY exists, nothing need to do.~n");
+                    lager:info("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
+                        warning ALREADY exists, nothing need to do.");
                 {non_exist, _} ->
                     %% 若 warning_unrepaired 表中不存在对应条目，则需要插入一条新数据
-                    io:format("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
-                        warning NOT exists, need to insert.~n"),
+                    lager:info("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
+                        warning NOT exists, need to insert."),
                     
                     %% 向 warning_unrepaired 中插入一条新数据
                     case gen_server:call(MySQLTask, {add_unrepaired_warning, DevMoid, ?P_SERVER, DomainMoid, 
                                 WarningCode, binary_to_list(Level), binary_to_list(Description), StatisticTime}, infinity) of
                         {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO warning_unrepaired' -- Success!~n");
+                            lager:info("[nms_task_control] 'INSERT INTO warning_unrepaired' -- Success!");
                         {error, Err1} ->
                             lager:warning("[nms_task_control] 'INSERT INTO warning_unrepaired' -- Failed! Error '~p'~n", 
                                 [Err1])
@@ -250,14 +250,14 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
                          {ok, success} ->
                             lager:info("[nms_task_control] 'INSERT INTO warning_repair_statistic' Success! WARN_ON!");
                          {error, Err2} ->
-                            io:format("[nms_task_control] 'INSERT INTO warning_repair_statistic' Failed! Error '~p'~n", 
+                            lager:warning("[nms_task_control] 'INSERT INTO warning_repair_statistic' Failed! Error '~p'~n", 
                                 [Err2])
                     end,
 
                     io:format("", []);
 
                 pool_init_failed ->
-                    io:format("[nms_task_control] Something wrong happended, get 'pool_init_failed'!!~n")
+                    lager:warning("[nms_task_control] Something wrong happended, get 'pool_init_failed'!!")
             end,
 
             %% 向 redis 表 p_server:devid:warning 中添加告警码
@@ -273,7 +273,7 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
                     lager:info("[nms_task_control] 'SADD p_server:~p:warning ~p' -- Success!~n", 
                         [DevMoid, WarningCode]);  
                 {error, Err3} ->
-                    io:format("[nms_task_control] 'SADD p_server:~p:warning xx' -- Failed! Error '~p'~n", 
+                    lager:warning("[nms_task_control] 'SADD p_server:~p:warning xx' -- Failed! Error '~p'~n", 
                         [DevMoid, Err3])
             end,
 
@@ -302,9 +302,9 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
                                 WarningCode, binary_to_list(Level), binary_to_list(Description), StartTime, 
                                 StatisticTime}, infinity) of
                          {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO warning_repaired' -- Success!~n");
+                            lager:info("[nms_task_control] 'INSERT INTO warning_repaired' -- Success!");
                          {error, Err4} ->
-                            io:format("[nms_task_control] 'INSERT INTO warning_repaired' -- Failed! Error '~p'~n", 
+                            lager:warning("[nms_task_control] 'INSERT INTO warning_repaired' -- Failed! Error '~p'~n", 
                                 [Err4])
                     end,
 
@@ -312,9 +312,9 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
                     case gen_server:call(MySQLTask, {del_unrepaired_warning, DevMoid, DomainMoid, 
                                 WarningCode}, infinity) of
                          {ok, success} ->
-                            lager:info("[nms_task_control] 'DELETE FROM warning_unrepaired' -- Success!~n");
+                            lager:info("[nms_task_control] 'DELETE FROM warning_unrepaired' -- Success!");
                          {error, Err5} ->
-                            io:format("[nms_task_control] 'DELETE FROM warning_unrepaired' -- Failed! Error '~p'~n", 
+                            lager:warning("[nms_task_control] 'DELETE FROM warning_unrepaired' -- Failed! Error '~p'~n", 
                                 [Err5])
                     end,
 
@@ -324,7 +324,7 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
                          {ok, success} ->
                             lager:info("[nms_task_control] 'INSERT INTO warning_repair_statistic' Success! WARN_OFF!");
                          {error, Err6} ->
-                            io:format("[nms_task_control] 'INSERT INTO warning_repair_statistic' Failed! Error '~p'~n", 
+                            lager:warning("[nms_task_control] 'INSERT INTO warning_repair_statistic' Failed! Error '~p'~n", 
                                 [Err6])
                     end,
 
@@ -332,9 +332,9 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
                {non_exist, _} ->
                     %% 若 warning_unrepaired 表中不存在对应条目，则不用对该表做变更
                     lager:info("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
-                        CPU warning NOT exists, nothing need to do.~n");
+                        CPU warning NOT exists, nothing need to do.");
                 pool_init_failed ->
-                    io:format("[nms_task_control] Something wrong happended, get 'pool_init_failed'!!~n", [])
+                    lager:warning("[nms_task_control] Something wrong happended, get 'pool_init_failed'!!")
             end,
 
             %% 从 redis 表 p_server:devid:warning 中删除告警码
@@ -349,7 +349,7 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
                     lager:info("[nms_task_control] 'SREM p_server:~p:warning ~p' -- Success!~n", 
                         [DevMoid, WarningCode]);  
                 {error, Err7} ->
-                    io:format("[nms_task_control] 'SREM p_server:~p:warning xx' Failed! Error '~p'~n", 
+                    lager:warning("[nms_task_control] 'SREM p_server:~p:warning xx' Failed! Error '~p'~n", 
                         [DevMoid, Err7])
             end,
 
@@ -439,14 +439,14 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
             %% 查询保存 CPU 阈值信息的表 resource_limit
             Cpu_Threshold = case gen_server:call(RedisTask, {get_server_cpu_limit}, infinity) of
                 {error, CpuErr1} ->
-                    io:format("[nms_task_control] 'GET server_cpu_limit' -- Failed! Error '~p'~n", [CpuErr1]),
+                    lager:warning("[nms_task_control] 'GET server_cpu_limit' -- Failed! Error '~p'~n", [CpuErr1]),
                     case gen_server:call(MySQLTask, {get_server_cpu_limit}, infinity) of
                         {ok, CpuValFromMySQL} ->
                             lager:info("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Success! Value '~p'~n", 
                                 [CpuValFromMySQL]),
                             CpuValFromMySQL;
                         _ ->
-                            io:format("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Failed! 
+                            lager:warning("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Failed! 
                                 Use ~p by default!~n", [?CPU_THRESHOLD_DEFAULT]),
                             ?CPU_THRESHOLD_DEFAULT
                     end;
@@ -474,7 +474,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
             case gen_server:call(RedisTask, {update_physical_server_cpu_resource, 
                         binary_to_list(DevMoid_), CpuAverage}, infinity) of
                 {error, CpuErr2} ->
-                    io:format("[nms_task_control] 'HMSET p_server:~p:resource cpu xx' -- Failed! Error '~p'~n", 
+                    lager:warning("[nms_task_control] 'HMSET p_server:~p:resource cpu xx' -- Failed! Error '~p'~n", 
                         [DevMoid, CpuErr2]);
                 {ok, _} ->
                     lager:info("[nms_task_control] 'HMSET p_server:~p:resource cpu ~p' -- Success!~n", 
@@ -507,22 +507,22 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
             case gen_server:call(MySQLTask, {add_memory_statistic, DomainMoid, DevMoid, MemUsePct, StatisticTime}, infinity) of
                 {ok, success} ->
-                    lager:info("[nms_task_control] 'INSERT INTO memory_statistic' -- Success!~n");
+                    lager:info("[nms_task_control] 'INSERT INTO memory_statistic' -- Success!");
                 {error, MemErr0} ->
-                    io:format("[nms_task_control] 'INSERT INTO memory_statistic' -- Failed! Error '~p'~n", [MemErr0])
+                    lager:warning("[nms_task_control] 'INSERT INTO memory_statistic' -- Failed! Error '~p'~n", [MemErr0])
             end,
 
             %% 查询保存 Mem 阈值信息的表 resource_limit
             Mem_Threshold = case gen_server:call(RedisTask, {get_server_mem_limit}, infinity) of
                 {error, MemErr1} ->
-                    io:format("[nms_task_control] 'GET server_memory_limit' -- Failed! Error '~p'~n", [MemErr1]),
+                    lager:warning("[nms_task_control] 'GET server_memory_limit' -- Failed! Error '~p'~n", [MemErr1]),
                     case gen_server:call(MySQLTask, {get_server_mem_limit}, infinity) of
                         {ok, MemValFromMySQL} ->
                             lager:info("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Success! Value '~p'~n", 
                                 [MemValFromMySQL]),
                             MemValFromMySQL;
                         _ ->
-                            io:format("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Failed! 
+                            lager:warning("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Failed! 
                                 Use ~p by default!~n", [?MEM_THRESHOLD_DEFAULT]),
                             ?MEM_THRESHOLD_DEFAULT
                     end;
@@ -543,10 +543,10 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
             %% 更新 redis 表 p_server:devid:resource
             case gen_server:call(RedisTask, {update_physical_server_mem_resource, DevMoid, MemUsePct}, infinity) of
                 {error, MemErr2} ->
-                    io:format("[nms_task_control] 'HMSET p_server:~p:resource memory xx' -- Failed! Error '~p'~n", 
+                    lager:warning("[nms_task_control] 'HMSET p_server:~p:resource memory xx' -- Failed! Error '~p'~n", 
                         [DevMoid, MemErr2]);
                 {ok, _} ->
-                    lager:info("[nms_task_control] 'HMSET p_server:~p:resource memory ~p' -- Success!~n", 
+                    lager:info("[nms_task_control] 'HMSET p_server:~p:resource memory ~p' -- Success!", 
                         [DevMoid, MemUsePct])
             end,
 
@@ -575,22 +575,22 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
             case gen_server:call(MySQLTask, {add_disk_statistic, DomainMoid, DevMoid, DiskUsePct, StatisticTime}, infinity) of
                 {ok, success} ->
-                    lager:info("[nms_task_control] 'INSERT INTO disk_statistic' -- Success!~n");
+                    lager:info("[nms_task_control] 'INSERT INTO disk_statistic' -- Success!");
                 {error, DiskErr0} ->
-                    io:format("[nms_task_control] 'INSERT INTO disk_statistic' -- Failed! Error '~p'~n", [DiskErr0])
+                    lager:warning("[nms_task_control] 'INSERT INTO disk_statistic' -- Failed! Error '~p'~n", [DiskErr0])
             end,
 
             %% 查询保存 Disk 阈值信息的表 resource_limit
             Disk_Threshold = case gen_server:call(RedisTask, {get_server_disk_limit}, infinity) of
                 {error, DiskErr1} ->
-                    io:format("[nms_task_control] 'GET server_disk_limit' -- Failed! Error '~p'~n", [DiskErr1]),
+                    lager:warning("[nms_task_control] 'GET server_disk_limit' -- Failed! Error '~p'~n", [DiskErr1]),
                     case gen_server:call(MySQLTask, {get_server_disk_limit}, infinity) of
                         {ok, DiskValFromMySQL} ->
                             lager:info("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
                                 [DiskValFromMySQL]),
                             DiskValFromMySQL;
                         _ ->
-                            io:format("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Failed! 
+                            lager:warning("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Failed! 
                                 Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
                             ?DISK_THRESHOLD_DEFAULT
                     end;
@@ -611,10 +611,10 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
             %% 更新 redis 表 p_server:devid:resource
             case gen_server:call(RedisTask, {update_physical_server_disk_resource, DevMoid, DiskUsePct}, infinity) of
                 {error, DiskErr2} ->
-                    io:format("[nms_task_control] 'HMSET p_server:~p:resource disk xx' -- Failed! Error '~p'~n", 
+                    lager:warning("[nms_task_control] 'HMSET p_server:~p:resource disk xx' -- Failed! Error '~p'~n", 
                         [DevMoid, DiskErr2]);
                 {ok, _} ->
-                    lager:info("[nms_task_control] 'HMSET p_server:~p:resource disk ~p' -- Success!~n", 
+                    lager:info("[nms_task_control] 'HMSET p_server:~p:resource disk ~p' -- Success!", 
                         [DevMoid, DiskUsePct])
             end,
 
@@ -679,14 +679,14 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
             %% 查询 Redis 保存 发送/接收流量 阈值信息的表 resource_limit
             Net_Threshold = case gen_server:call(RedisTask, {get_server_net_limit}, infinity) of
                 {error, NetErr1} ->
-                    io:format("[nms_task_control] 'GET server_port_limit' -- Failed! Error '~p'~n", [NetErr1]),
+                    lager:warning("[nms_task_control] 'GET server_port_limit' -- Failed! Error '~p'~n", [NetErr1]),
                     case gen_server:call(MySQLTask, {get_server_net_limit}, infinity) of
                         {ok, NetValFromMySQL} ->
                             lager:info("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
                                 [NetValFromMySQL]),
                             NetValFromMySQL;
                         _ ->
-                            io:format("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Failed! 
+                            lager:warning("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Failed! 
                                 Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
                             ?NET_THRESHOLD_DEFAULT
                     end;
@@ -712,7 +712,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
             case gen_server:call(RedisTask, {update_physical_server_net_resource, DevMoid, RecvBytesTotal, SendBytesTotal}, 
                     infinity) of
                 {error, DiskErr2} ->
-                    io:format("[nms_task_control] 'HMSET p_server:~p:resource portin xx portout xx' -- Failed! Error '~p'~n", 
+                    lager:warning("[nms_task_control] 'HMSET p_server:~p:resource portin xx portout xx' -- Failed! Error '~p'~n", 
                         [DevMoid, DiskErr2]);
                 {ok, _} ->
                     lager:info("[nms_task_control] 'HMSET p_server:~p:resource portin ~p portout ~p' -- Success!~n", 
@@ -810,7 +810,7 @@ init([TRef, MQTask, RedisTask, MySQLTask]) ->
 
 handle_call( {do_consume, QueueN}, _From, #state{mq_task=MQTask} = State) ->
     _ = nms_rabbitmq_task:do_consume(MQTask, self(), QueueN),
-    io:format("[nms_task_control] handle_call/3 do_consume~n"),
+    lager:notice("[nms_task_control] handle_call/3 Recv {do_consume, ~p}~n", [QueueN]),
     Reply = ok,
     {reply, Reply, State};
 handle_call(_Request, _From, State) ->

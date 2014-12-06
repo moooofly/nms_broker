@@ -2,7 +2,8 @@
 
 -include("nms_broker.hrl").
 
--export([start_default/1, start_custom/2]).
+-export([start_default/1]).
+-export([start_custom/2, start_custom/5]).
 -export([start_task_group_only/2]).
 -export([start_task/1]).
 
@@ -36,6 +37,13 @@ start_default(MRef) ->
 %% 
 start_custom(MRef, #args{} = Args) ->
     ensure_started(),
+    {ok, _MSup, ManControl} = nms_broker_sup:start_manager_sup(child_spec(MRef)),
+    {ok, TRef, TaskControl} = nms_manager_control:start_task(ManControl, Args),
+    {ok, {manager_control, MRef, ManControl}, {task_control, TRef, TaskControl}}.
+
+start_custom(MRef, TRef, RabbitConfig, RedisConfig, MySQLConfig) ->
+    ensure_started(),
+    Args = #args{task_ref=TRef, mq_args=RabbitConfig, redis_args=RedisConfig, mysql_args=MySQLConfig},
     {ok, _MSup, ManControl} = nms_broker_sup:start_manager_sup(child_spec(MRef)),
     {ok, TRef, TaskControl} = nms_manager_control:start_task(ManControl, Args),
     {ok, {manager_control, MRef, ManControl}, {task_control, TRef, TaskControl}}.
