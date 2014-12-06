@@ -174,9 +174,9 @@ get_web_resource_count(RedisClient,DomainMoid,Type) ->
 add_terminal_online_statistic(DomainMoid,XmppOnline,SipOnline,TipOnline,MonitorOnline,H323Online,StatisticTime) ->
 	SQL = "INSERT INTO terminal_online_statistic VALUES(NULL,'"++DomainMoid++"',"++integer_to_list(XmppOnline)++","++integer_to_list(SipOnline)++","
 	      ++integer_to_list(TipOnline)++","++integer_to_list(MonitorOnline)++","++integer_to_list(H323Online)++",'"++StatisticTime++"');",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Result]),
+	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
 		{error_packet,_,_,_,Msg} ->
 			{error,Msg};
@@ -224,9 +224,9 @@ add_terminal_version_statistic( DomainMoid,DevMoid,E164,Type,Oem,Version,Recomme
 -spec add_cpu_statistic(atom(),string(),string(),integer(),integer(),string()) -> {ok,success}|{error,string()}.
 add_cpu_statistic(PoolId,DomainMoid,DevMoid,CpuID,Cpu,StatisticTime) ->
 	SQL = "INSERT INTO cpu_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"++integer_to_list(CpuID)++","++integer_to_list(Cpu)++",'"++StatisticTime++"');",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Result]),
+	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
 		{error_packet,_,_,_,Msg} ->
 			{error,Msg};
@@ -238,9 +238,9 @@ add_cpu_statistic(PoolId,DomainMoid,DevMoid,CpuID,Cpu,StatisticTime) ->
 -spec add_memory_statistic(atom(), string(),string(),integer(),string()) -> {ok,success}|{error,string()}.
 add_memory_statistic(PoolId,DomainMoid,DevMoid,Memory,StatisticTime) ->
 	SQL = "INSERT INTO memory_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"++integer_to_list(Memory)++",'"++StatisticTime++"');",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Result]),
+	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
 		{error_packet,_,_,_,Msg} ->
 			{error,Msg};
@@ -252,9 +252,9 @@ add_memory_statistic(PoolId,DomainMoid,DevMoid,Memory,StatisticTime) ->
 -spec add_disk_statistic(atom(),string(),string(),integer(),string()) -> {ok,success}|{error,string()}.	
 add_disk_statistic(PoolId,DomainMoid,DevMoid,Disk,StatisticTime) ->
 	SQL = "INSERT INTO disk_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"++integer_to_list(Disk)++",'"++StatisticTime++"');",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Result]),
+	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
 		{error_packet,_,_,_,Msg} ->
 			{error,Msg};
@@ -267,9 +267,9 @@ add_disk_statistic(PoolId,DomainMoid,DevMoid,Disk,StatisticTime) ->
 add_net_statistic(PoolId,DomainMoid,DevMoid,CardID,PortIn,PortOut,StatisticTime) ->
 	SQL = "INSERT INTO netcard_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"
 	      ++integer_to_list(CardID)++","++integer_to_list(PortIn)++","++integer_to_list(PortOut)++",'"++StatisticTime++"');",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Result]),
+	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
 		{error_packet,_,_,_,Msg} ->
 			{error,Msg};
@@ -282,9 +282,9 @@ add_net_statistic(PoolId,DomainMoid,DevMoid,CardID,PortIn,PortOut,StatisticTime)
 add_web_resource_statistic(DomainMoid,AcountCenter,MeetingCenter,RecordService,DataMeeting,Communication,StatisticTime) ->
 	SQL = "INSERT INTO web_resource_statistic VALUES(NULL,'"++DomainMoid++"',"++integer_to_list(AcountCenter)++","++integer_to_list(MeetingCenter)++","
 	      ++integer_to_list(RecordService)++","++integer_to_list(DataMeeting)++","++integer_to_list(Communication)++",'"++StatisticTime++"');",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Result]),
+	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
 		{error_packet,_,_,_,Msg} ->
 			{error,Msg};
@@ -297,9 +297,9 @@ add_web_resource_statistic(DomainMoid,AcountCenter,MeetingCenter,RecordService,D
 add_media_resource_statistic(DomainMoid,TMeeting,PMeeting,StatisticTime) ->
 	SQL = "INSERT INTO media_resource_statistic VALUES(NULL,'"++DomainMoid++"',"++integer_to_list(TMeeting)++","
 	      ++integer_to_list(PMeeting)++",'"++StatisticTime++"');",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Result]),
+	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
 		{error_packet,_,_,_,Msg} ->
 			{error,Msg};
@@ -312,9 +312,9 @@ add_media_resource_statistic(DomainMoid,TMeeting,PMeeting,StatisticTime) ->
 add_warning_repair_statistic(PoolId,DomainMoid,DevMoid,WarningCode,Status,StatisticTime) ->
 	SQL = "INSERT INTO warning_repair_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"
 	      ++integer_to_list(WarningCode)++",'"++Status++"','"++StatisticTime++"');",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Result]),
+	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
 		{error_packet,_,_,_,Msg} ->
 			{error,Msg};
@@ -326,7 +326,7 @@ add_warning_repair_statistic(PoolId,DomainMoid,DevMoid,WarningCode,Status,Statis
 -spec get_terminal_online_statistic(string(),string(),string()) -> list().
 get_terminal_online_statistic( DomainMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM terminal_online_statistic WHERE domain_moid = '"++DomainMoid++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -336,12 +336,12 @@ get_terminal_version_statistic( DomainMoid,Oem ) ->
     case Oem of
 		[] ->
 			SQL = "SELECT * FROM terminal_version_statistic WHERE domain_moid = '"++DomainMoid++"';",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows;
 		_ ->
 			SQL = "SELECT * FROM terminal_version_statistic WHERE domain_moid = '"++DomainMoid++"' && oem = '"++Oem++"';",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows
 	end.
@@ -351,7 +351,7 @@ get_terminal_version_statistic( DomainMoid,Oem ) ->
 get_cpu_statictic( DomainMoid,DevMoid,StartTime,StopTime ) ->
 	SQL = "SELECT * FROM cpu_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	      ++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -360,7 +360,7 @@ get_cpu_statictic( DomainMoid,DevMoid,StartTime,StopTime ) ->
 get_memory_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM memory_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	      ++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -369,7 +369,7 @@ get_memory_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 get_disk_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM disk_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	      ++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -378,7 +378,7 @@ get_disk_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 get_netcard_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM netcard_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	      ++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -386,7 +386,7 @@ get_netcard_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 -spec get_web_resource_statistic(string(),string(),string()) -> list().
 get_web_resource_statistic( DomainMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM web_resource_statistic WHERE domain_moid = '"++DomainMoid++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -394,7 +394,7 @@ get_web_resource_statistic( DomainMoid, StartTime, StopTime ) ->
 -spec get_media_resource_statistic(string(),string(),string()) -> list().
 get_media_resource_statistic( DomainMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM media_resource_statistic WHERE domain_moid = '"++DomainMoid++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 
@@ -403,7 +403,7 @@ get_media_resource_statistic( DomainMoid, StartTime, StopTime ) ->
 get_warning_repair_statistic( DomainMoid,StartTime,StopTime ) ->
 	SQL = "SELECT * FROM warning_repair_statistic WHERE domain_moid = '"++DomainMoid
 	++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -412,7 +412,7 @@ get_warning_repair_statistic( DomainMoid,StartTime,StopTime ) ->
 get_warning_repair_statistic( DomainMoid,DevMoid,StartTime,StopTime ) ->
 	SQL = "SELECT * FROM warning_repair_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	

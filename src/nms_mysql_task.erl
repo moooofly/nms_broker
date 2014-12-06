@@ -25,7 +25,7 @@
 start_link(PoolId, Args) when is_list(Args) ->
     gen_server:start_link(?MODULE, [PoolId, Args], []);
 start_link(_, _) ->
-    io:format("Args must be list!Error!"),
+    lager:error("Args must be list!Error!"),
     {error, args_not_list}.
 
 
@@ -52,13 +52,13 @@ initialize_pool_status(Pool, Status) ->
         off ->
             case emysql:add_pool(Pool#pool.pool_id, Pool#pool.options) of 
                 ok ->
-                    io:format("[nms_mysql_task] PoolId(~p) create Success!~n", [PoolId]),
+                    lager:notice("[nms_mysql_task] PoolId(~p) create Success!~n", [PoolId]),
                     ok;        
                 {error, pool_already_exists} ->
-                    io:format("[nms_mysql_task] PoolId(~p) already Exists~n", [PoolId]),
+                    lager:notice("[nms_mysql_task] PoolId(~p) already Exists~n", [PoolId]),
                     ok;
                 {error, Error} ->
-                    io:format("[nms_mysql_task] get {error, ~p}~n", [Error]),
+                    lager:error("[nms_mysql_task] get {error, ~p}~n", [Error]),
                     not_ok
             end;
         on ->
@@ -83,9 +83,10 @@ init([PoolId, Args]) ->
 
     Pool = #pool{pool_id=PoolId, options=Args},
 
-    io:format("~n~s~n", [string:chars($-,72)]),
+    lager:notice("~s~n", [string:chars($-,72)]),
 
-    io:format(  "    PoolId=~p~n"
+    lager:notice("~n"
+                "    PoolId=~p~n"
                 "    Size=~p~n"
                 "    User=~p~n"
                 "    Password=~p~n"
@@ -97,11 +98,11 @@ init([PoolId, Args]) ->
                 "    ConnectTimeout=~p~n", 
         [PoolId,Size,User,Password,Host,Port,Database,Encoding,StartCmds,ConnectTimeout]), 
 
-    io:format("~n~s~n", [string:chars($-,72)]),
+    lager:notice("~s~n", [string:chars($-,72)]),
 
     case catch ensure_emysql_started() of
         ok ->
-            io:format("[nms_mysql_task] init ok!~n", []),
+            lager:info("[nms_mysql_task] init ok!~n", []),
             {ok, #state{pool_info=Pool, status=off}};
         {error, Error} ->
             {stop, {emysql_startapp_error, Error}}
@@ -110,7 +111,7 @@ init([PoolId, Args]) ->
 
 handle_call( {add_warning_repair_statistic, DomainMoid, DevMoid, WarningCode, WarningStatus, StatisticTime}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv 'add_warning_repair_statistic'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_warning_repair_statistic'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
@@ -122,13 +123,13 @@ handle_call( {add_warning_repair_statistic, DomainMoid, DevMoid, WarningCode, Wa
                      {reply, {error, Error}, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] add_warning_repair_statistic failed!~n", []),
+            lager:warning("[nms_mysql_task] add_warning_repair_statistic failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {del_unrepaired_warning, DevGuid, DomainGuid, WarningCode}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv 'del_unrepaired_warning'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'del_unrepaired_warning'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
@@ -139,13 +140,13 @@ handle_call( {del_unrepaired_warning, DevGuid, DomainGuid, WarningCode},
                      {reply, {error, Error}, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] del_unrepaired_warning failed!~n", []),
+            lager:warning("[nms_mysql_task] del_unrepaired_warning failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {add_repaired_warning, DevMoid, DevType, DomainMoid, WarningCode, Level, Description, StartTime, ResolveTime}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv 'add_repaired_warning'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_repaired_warning'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
@@ -157,49 +158,49 @@ handle_call( {add_repaired_warning, DevMoid, DevType, DomainMoid, WarningCode, L
                      {reply, {error, Error}, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] add_repaired_warning failed!~n", []),
+            lager:warning("[nms_mysql_task] add_repaired_warning failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {add_unrepaired_warning, DevMoid, DevType, DomainMoid, WarningCode, Level, Description, StartTime}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv 'add_unrepaired_warning'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_unrepaired_warning'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
             case warning_handler:add_unrepaired_warning(Pool#pool.pool_id, DevMoid, DevType, 
                         DomainMoid, WarningCode, Level, Description, StartTime) of
                 [] ->
-                    io:format("[nms_mysql_task] ###### have got no warning code information ######~n", []),
+                    lager:notice("[nms_mysql_task] ###### have got no warning code information ######~n", []),
                     {reply, [], State#state{status=on}};
                 Value ->
                     {reply, Value, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] add_unrepaired_warning failed!~n", []),
+            lager:warning("[nms_mysql_task] add_unrepaired_warning failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {get_warning_code_detail, WarningCode}, _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv 'get_warning_code_detail'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'get_warning_code_detail'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
             case warning_handler:get_warning_code_detail(Pool#pool.pool_id, WarningCode) of
                 [] ->
-                    io:format("[nms_mysql_task] ###### have got no warning code information ######~n", []),
+                    lager:notice("[nms_mysql_task] ###### have got no warning code information ######~n", []),
                     {reply, [], State#state{status=on}};
                 Value ->
                     {reply, Value, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] get_warning_code_detail failed!~n", []),
+            lager:warning("[nms_mysql_task] get_warning_code_detail failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {get_device_warning_by_code, DomainMoid, DevMoid, WarningCode}, 
                 _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv 'get_device_warning_by_code'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'get_device_warning_by_code'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
@@ -210,14 +211,14 @@ handle_call( {get_device_warning_by_code, DomainMoid, DevMoid, WarningCode},
                     {reply, {exist, UnRepairedWarning}, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] get_device_warning_by_code failed!~n", []),
+            lager:warning("[nms_mysql_task] get_device_warning_by_code failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 
 handle_call( {add_net_statistic, DomainMoid, DevMoid, CardID, PortIn, PortOut, StatisticTime}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv add_net_statistic~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_net_statistic'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
@@ -229,13 +230,13 @@ handle_call( {add_net_statistic, DomainMoid, DevMoid, CardID, PortIn, PortOut, S
                      {reply, {error, Error}, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] add_net_statistic failed!~n", []),
+            lager:warning("[nms_mysql_task] add_net_statistic failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {add_disk_statistic, DomainMoid, DevMoid, DiskPct, StatisticTime}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv add_disk_statistic~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_disk_statistic'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
@@ -247,13 +248,13 @@ handle_call( {add_disk_statistic, DomainMoid, DevMoid, DiskPct, StatisticTime},
                      {reply, {error, Error}, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] add_disk_statistic failed!~n", []),
+            lager:warning("[nms_mysql_task] add_disk_statistic failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {add_memory_statistic, DomainMoid, DevMoid, MemoryPct, StatisticTime}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv add_memory_statistic~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_memory_statistic'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
@@ -265,13 +266,13 @@ handle_call( {add_memory_statistic, DomainMoid, DevMoid, MemoryPct, StatisticTim
                      {reply, {error, Error}, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] add_memory_statistic failed!~n", []),
+            lager:warning("[nms_mysql_task] add_memory_statistic failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {add_cpu_statistic, DomainMoid, DevMoid, CpuID, Cpu, StatisticTime}, 
                 _From, #state{pool_info=Pool,status=Status}=State) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv 'add_cpu_statistic'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_cpu_statistic'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
@@ -279,59 +280,59 @@ handle_call( {add_cpu_statistic, DomainMoid, DevMoid, CpuID, Cpu, StatisticTime}
                 {ok,success} ->
                     {reply, ok, State#state{status=on}};
                 {error,_} ->
-                    io:format("TODO: need code something!~n"),
+                    lager:warning("TODO: need code something!~n"),
                     {reply, not_ok, State#state{status=on}}
             end;            
         _ ->
-            io:format("[nms_mysql_task] add_cpu_statistic failed!~n"),
+            lager:warning("[nms_mysql_task] add_cpu_statistic failed!~n"),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {get_server_net_limit}, _From, #state{pool_info=Pool,status=Status}=State ) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv get_server_net_limit~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'get_server_net_limit'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
             Value = system_set_handler:get_server_net_limit_mysql(Pool#pool.pool_id),
             {reply, {ok, Value}, State#state{status=on}};            
         _ ->
-            io:format("[nms_mysql_task] get_server_net_limit failed!~n", []),
+            lager:warning("[nms_mysql_task] get_server_net_limit failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {get_server_disk_limit}, _From, #state{pool_info=Pool,status=Status}=State ) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv get_server_disk_limit~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'get_server_disk_limit'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
             Value = system_set_handler:get_server_disk_limit_mysql(Pool#pool.pool_id),
             {reply, {ok, Value}, State#state{status=on}};            
         _ ->
-            io:format("[nms_mysql_task] get_server_disk_limit failed!~n", []),
+            lager:warning("[nms_mysql_task] get_server_disk_limit failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {get_server_mem_limit}, _From, #state{pool_info=Pool,status=Status}=State ) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv get_server_mem_limit~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'get_server_mem_limit'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
             Value = system_set_handler:get_server_mem_limit_mysql(Pool#pool.pool_id),
             {reply, {ok, Value}, State#state{status=on}};            
         _ ->
-            io:format("[nms_mysql_task] get_server_mem_limit failed!~n", []),
+            lager:warning("[nms_mysql_task] get_server_mem_limit failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 
 handle_call( {get_server_cpu_limit}, _From, #state{pool_info=Pool,status=Status}=State ) ->
-    io:format("[nms_mysql_task] PoolId(~p) <== Recv 'get_server_cpu_limit'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'get_server_cpu_limit'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
             Value = system_set_handler:get_server_cpu_limit_mysql(Pool#pool.pool_id),
             {reply, {ok, Value}, State#state{status=on}};            
         _ ->
-            io:format("[nms_mysql_task] get_server_cpu_limit failed!~n", []),
+            lager:warning("[nms_mysql_task] get_server_cpu_limit failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 

@@ -43,14 +43,14 @@ update_terminal_cpu_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","terminal_cpu_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES('"++integer_to_list(Limit)++"',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -61,7 +61,7 @@ update_terminal_cpu_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET t_cpu='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -78,9 +78,9 @@ get_terminal_cpu_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT t_cpu FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -95,14 +95,14 @@ update_terminal_memory_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","terminal_memory_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,'"++integer_to_list(Limit)++"',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -113,7 +113,7 @@ update_terminal_memory_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET t_memory='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -130,9 +130,9 @@ get_terminal_memory_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT t_memory FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -147,14 +147,14 @@ update_server_cpu_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","server_cpu_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,NULL,'"++integer_to_list(Limit)++"',NULL,NULL,NULL,NULL,NULL,NULL,NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -165,7 +165,7 @@ update_server_cpu_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET s_cpu='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -186,9 +186,9 @@ get_server_cpu_limit_redis(RedisClient) ->
 -spec get_server_cpu_limit_mysql(atom()) -> {ok,binary()}|{error,string()}.
 get_server_cpu_limit_mysql(PoolId) ->
 	SQL = "SELECT s_cpu FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Row]),
+	lager:debug("The Result is : ~p~n",[Row]),
 	[[Value]] = Row,
 	Value.
 
@@ -199,9 +199,9 @@ get_server_cpu_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT s_cpu FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -216,14 +216,14 @@ update_server_mem_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","server_memory_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,NULL,NULL,'"++integer_to_list(Limit)++"',NULL,NULL,NULL,NULL,NULL,NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -234,7 +234,7 @@ update_server_mem_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET s_memory='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -255,9 +255,9 @@ get_server_mem_limit_redis(RedisClient) ->
 -spec get_server_mem_limit_mysql(atom()) -> {ok,binary()}|{error,string()}.
 get_server_mem_limit_mysql(PoolId) ->
 	SQL = "SELECT s_memory FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Row]),
+	lager:debug("The Result is : ~p~n",[Row]),
 	[[Value]] = Row,
 	Value.
 
@@ -268,9 +268,9 @@ get_server_mem_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT s_memory FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -285,14 +285,14 @@ update_server_disk_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","server_disk_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,NULL,NULL,NULL,'"++integer_to_list(Limit)++"',NULL,NULL,NULL,NULL,NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -303,7 +303,7 @@ update_server_disk_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET s_disk='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -325,9 +325,9 @@ get_server_disk_limit_redis(RedisClient) ->
 -spec get_server_disk_limit_mysql(atom()) -> {ok,binary()}|{error,string()}.
 get_server_disk_limit_mysql(PoolId) ->
 	SQL = "SELECT s_disk FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Row]),
+	lager:debug("The Result is : ~p~n",[Row]),
 	[[Value]] = Row,
 	Value.
 
@@ -338,9 +338,9 @@ get_server_disk_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT s_disk FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -355,14 +355,14 @@ update_server_net_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","server_port_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,NULL,NULL,NULL,NULL,'"++integer_to_list(Limit)++"',NULL,NULL,NULL,NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -373,7 +373,7 @@ update_server_net_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET s_port='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -395,9 +395,9 @@ get_server_net_limit_redis(RedisClient) ->
 -spec get_server_net_limit_mysql(atom()) -> {ok,binary()}|{error,string()}.
 get_server_net_limit_mysql(PoolId) ->
 	SQL = "SELECT s_port FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	io:format("The Result is : ~p~n",[Row]),
+	lager:debug("The Result is : ~p~n",[Row]),
 	[[Value]] = Row,
 	Value.
 	
@@ -409,9 +409,9 @@ get_server_net_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT s_port FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -426,14 +426,14 @@ update_server_pas_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","server_pas_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,NULL,NULL,NULL,NULL,NULL,'"++integer_to_list(Limit)++"',NULL,NULL,NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -444,7 +444,7 @@ update_server_pas_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET s_pas='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -461,9 +461,9 @@ get_server_pas_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT s_pas FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -478,14 +478,14 @@ update_server_callpair_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","server_callpair_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,NULL,NULL,NULL,NULL,NULL,NULL,'"++integer_to_list(Limit)++"',NULL,NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -496,7 +496,7 @@ update_server_callpair_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET s_callpair='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -513,9 +513,9 @@ get_server_callpair_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT s_callpair FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -530,14 +530,14 @@ update_server_upu_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","server_upu_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'"++integer_to_list(Limit)++"',NULL);",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -548,7 +548,7 @@ update_server_upu_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET s_upu='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -565,9 +565,9 @@ get_server_upu_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT s_upu FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->
@@ -582,14 +582,14 @@ update_server_nms_limit( RedisClient,Limit,PoolId ) ->
 	eredis:q(RedisClient,["SET","server_nms_limit",Limit]),
 	
 	SQL = "SELECT * FROM resource_limit;",
-	io:format("The SQL is : ~p~n",[SQL]),
+	lager:debug("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO resource_limit VALUES(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'"++integer_to_list(Limit)++"');",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 	        Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -600,7 +600,7 @@ update_server_nms_limit( RedisClient,Limit,PoolId ) ->
 			SQL1 = "UPDATE resource_limit SET s_nms='"++integer_to_list(Limit)++"';",
 			io:format("The SQL1 is : ~p~n",[SQL1]),
 			Result = emysql:execute(PoolId,list_to_binary(SQL1)),
-			io:format("The Result is : ~p~n",[Result]),
+			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -617,9 +617,9 @@ get_server_nms_limit(RedisClient,PoolId) ->
 	case Value of
 		undefined ->
 			SQL = "SELECT s_nms FROM resource_limit;",
-			io:format("The SQL is : ~p~n",[SQL]),
+			lager:debug("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-			io:format("The Result is : ~p~n",[Row]),
+			lager:debug("The Result is : ~p~n",[Row]),
 			[[Value]] = Row,
 			Value;
 		_ ->

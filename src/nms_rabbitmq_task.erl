@@ -111,7 +111,6 @@ handle_info(#'basic.cancel_ok'{}, State) ->
 
 handle_info({#'basic.deliver'{}, #amqp_msg{payload=Payload}},
         #state{task_control=TaskCon}=State) ->
-    io:format("[nms_rabbitmq_task] TaskCon = ~p~n", [TaskCon]),
     TaskCon ! {#'basic.deliver'{}, Payload},
     {noreply, State}.
 

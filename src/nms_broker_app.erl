@@ -12,6 +12,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    lager:start(),
     nms_broker_sup:start_link().
 
 stop(_State) ->
