@@ -368,9 +368,20 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
     lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
     DevMoid = binary_to_list(DevMoid_),
 
+    %% rpttime 格式 year-month-day/hour:min:sec
     StatisticTime_ = rfc4627:get_field(JsonObj, "rpttime", undefined),
-    lager:info("  -->  StatisticTime = ~p~n", [StatisticTime_]),            
-    StatisticTime = binary_to_list(StatisticTime_),
+    lager:info("  -->  StatisticTime = ~p~n", [StatisticTime_]),
+    case StatisticTime_ of
+        undefined ->
+            {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
+            StatisticTime = integer_to_list(Year)++"-"++integer_to_list(Month)++"-"++integer_to_list(Day)++"/"++
+                            integer_to_list(Hour)++":"++integer_to_list(Min)++":"++integer_to_list(Sec),
+            lager:info("[nms_task_control] physical_device_proc => find no rpttime, so make it myself:~p~n", 
+                [StatisticTime]);
+        _ ->
+            StatisticTime = binary_to_list(StatisticTime_)
+    end,
+    
 
     EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
     lager:info("  -->  EventID = ~p~n", [EventID]),
@@ -396,6 +407,10 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
     %% 通过 "eventid" 判定为信息类型，更新 xxx_statistic 表的内容
     case EventID of
+        <<"EV_DEV_ONLINE">>     ->
+            lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event, do nothing!~n", []);
+        <<"EV_DEV_OFFLINE">>     ->
+            lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event, do nothing!~n", []);
         <<"EV_PFMINFO_CPU">>     ->
             %% 消息举例
             %% {obj,[{"devid",<<"1.1.1">>},
