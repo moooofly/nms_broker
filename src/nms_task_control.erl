@@ -113,24 +113,24 @@ devtype_distinguish(Devtype) ->
                     <<"SERVICE_TS_MT_WINDOWS_PAD">>    -> {terminal, 'WINDOWS_PAD'};
 
                     %% TS服务器
-                    <<"SERVICE_TS_SVR_MPCD">>       -> {logical, 'MPCD'};
-                    <<"SERVICE_TS_SVR_MCU">>        -> {logical, 'MCU'};
-                    <<"SERVICE_TS_SVR_MP">>         -> {logical, 'MP'};
-                    <<"SERVICE_TS_SVR_PRS">>        -> {logical, 'PRS'};
+                    <<"SERVICE_TS_SRV_MPCD">>       -> {logical, 'MPCD'};
+                    <<"SERVICE_TS_SRV_MCU">>        -> {logical, 'MCU'};
+                    <<"SERVICE_TS_SRV_MP">>         -> {logical, 'MP'};
+                    <<"SERVICE_TS_SRV_PRS">>        -> {logical, 'PRS'};
 
-                    <<"SERVICE_TS_SVR_SUS">>        -> {logical, 'SUS'};
-                    <<"SERVICE_TS_SVR_SUSMGR">>     -> {logical, 'SUSMGR'};
-                    <<"SERVICE_TS_SVR_APS">>        -> {logical, 'APS'};
-                    <<"SERVICE_TS_SVR_NTS">>        -> {logical, 'NTS'};
-                    <<"SERVICE_TS_SVR_LGS">>        -> {logical, 'LGS'};
-                    <<"SERVICE_TS_SVR_PAS">>        -> {logical, 'PAS'};
+                    <<"SERVICE_TS_SRV_SUS">>        -> {logical, 'SUS'};
+                    <<"SERVICE_TS_SRV_SUSMGR">>     -> {logical, 'SUSMGR'};
+                    <<"SERVICE_TS_SRV_APS">>        -> {logical, 'APS'};
+                    <<"SERVICE_TS_SRV_NTS">>        -> {logical, 'NTS'};
+                    <<"SERVICE_TS_SRV_LGS">>        -> {logical, 'LGS'};
+                    <<"SERVICE_TS_SRV_PAS">>        -> {logical, 'PAS'};
 
                     <<"SUPER_SERVICE_3AS">>         -> {logical, '3AS'};
                     <<"SUPER_SERVICE_NMS_MANAGER">> -> {logical, 'NMS_MANAGER'};
 
                     %% 开源服务器
-                    <<"SERVICE_TS_SVR_MOVISION">>   -> {logical, 'MOVISION'};
-                    <<"SERVICE_TS_SVR_MOOOO">>      -> {logical, 'MOOOO'};
+                    <<"SERVICE_TS_SRV_MOVISION">>   -> {logical, 'MOVISION'};
+                    <<"SERVICE_TS_SRV_MOOOO">>      -> {logical, 'MOOOO'};
                     <<"SERVICE_TS_SRV_MYSQL">>      -> {logical, 'MYSQL'};
                     <<"SERVICE_TS_SRV_LBS">>        -> {logical, 'LBS'};
                     <<"SERVICE_TS_SRV_XNU">>        -> {logical, 'XNU'};
@@ -200,7 +200,7 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
 
     %% 从 warning_code 表中获取详细信息
     %% 鉴于 warning_code 表中的内容是必定存在的，此处不做 case 分支处理
-    [Id,Type,Code,Name,Level,Description,Suggestion] = 
+    [_Id,_Type,_Code,_Name,Level,Description,_Suggestion] = 
         gen_server:call(MySQLTask, {get_warning_code_detail, WarningCode}, infinity),
 
     lager:info("[nms_task_control] 'SELECT * FROM warning_code WHERE code=~p' -- Success!~n", [WarningCode]),
@@ -364,13 +364,12 @@ warning_job(WarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTim
 
 physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
-    DevMoid_ = rfc4627:get_field(JsonObj, "devid", undefined),
-    lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
-    DevMoid = binary_to_list(DevMoid_),
+    DevGuid_ = rfc4627:get_field(JsonObj, "devid", undefined),
+    lager:info("  -->  DevGuid = ~p~n", [DevGuid_]),
+    DevGuid = binary_to_list(DevGuid_),
 
     %% rpttime 格式 year-month-day/hour:min:sec
     StatisticTime_ = rfc4627:get_field(JsonObj, "rpttime", undefined),
-    lager:info("  -->  StatisticTime = ~p~n", [StatisticTime_]),
     case StatisticTime_ of
         undefined ->
             {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
@@ -381,389 +380,786 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
         _ ->
             StatisticTime = binary_to_list(StatisticTime_)
     end,
-    
+    lager:info("  -->  StatisticTime = ~p~n", [StatisticTime]),
 
     EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
     lager:info("  -->  EventID = ~p~n", [EventID]),
 
     %% 通过 "devid" 在 redis 中查询当前物理设备所属的域 ID
-    %% 这里可能需要做异常处理，若 RedisCon 没有建立则会返回 {error, no_connection}
-    %% 若信息不存在则会返回 {error,<<"Key Error">>}
-    { ok, {DevMoid_, DevGuid_, DomainMoid_, DevName, Location, IP} } = 
-        gen_server:call(RedisTask, {get_physical_server_info, DevMoid_}, infinity),
+    case gen_server:call(RedisTask, {get_physical_server_info_by_guid, DevGuid_}, infinity) of
+        { ok, {DevMoid_, DevGuid_, DomainMoid_, DevName, Location, IP} } ->
+            lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
+            lager:info("  -->  DomainMoid = ~p~n", [DomainMoid_]),
+            lager:info("  -->  DevName = ~p~n", [DevName]),
+            lager:info("  -->  Location = ~p~n", [Location]),
+            lager:info("  -->  IP = ~p~n", [IP]),
 
-    io:format("~n"),
+            DevMoid = binary_to_list(DevMoid_),
+            DomainMoid = binary_to_list(DomainMoid_),
 
-    lager:info("  -->  DevGuid = ~p~n", [DevGuid_]),
-    lager:info("  -->  DomainMoid = ~p~n", [DomainMoid_]),
-    lager:info("  -->  DevName = ~p~n", [DevName]),
-    lager:info("  -->  Location = ~p~n", [Location]),
-    lager:info("  -->  IP = ~p~n", [IP]),
+            DevType_ = rfc4627:get_field(JsonObj, "devtype", undefined),
+            DevType = binary_to_list(DevType_),
 
-    DomainMoid = binary_to_list(DomainMoid_),
-    %%DevGuid = binary_to_list(DevGuid_),
+            %% 通过 "eventid" 判定为信息类型
+            case EventID of
+                <<"EV_SYSTIME_SYNC">>   ->
+                    lager:info("[nms_task_control] get 'EV_SYSTIME_SYNC' event, do nothing!~n", []);
+                <<"EV_DEV_ONLINE">>     ->
+                    %% 消息举例
+                    %% {obj,[{"eventid",<<"EV_DEV_ONLINE">>},
+                    %%       {"devid",<<"111">>},
+                    %%       {"devtype",<<"SERVICE_SRV_PHY">>},
+                    %%       {"collectorid",<<"60a44c502a60">>}]}
+                    %% 
+                    lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event!~n", []),
 
-    io:format("~n"),
+                    CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
+                    lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
+                    CollectorID = binary_to_list(CollectorID_),
+                    
+                    %%  设置 Redis 表 p_server:devid:online 的值为 online
+                    case gen_server:call(RedisTask, {add_physical_server_online, DevMoid}, infinity) of
+                        {error, PhyDevOnlineErr0} ->
+                            lager:warning("[nms_task_control] 'SET p_server:~p:online online' -- Failed! Error '~p'~n", 
+                                [DevMoid, PhyDevOnlineErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SET p_server:~p:online online' -- Success!~n", [DevMoid])
+                    end,
 
-    %% 通过 "eventid" 判定为信息类型，更新 xxx_statistic 表的内容
-    case EventID of
-        <<"EV_DEV_ONLINE">>     ->
-            lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event, do nothing!~n", []);
-        <<"EV_DEV_OFFLINE">>     ->
-            lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event, do nothing!~n", []);
-        <<"EV_PFMINFO_CPU">>     ->
-            %% 消息举例
-            %% {obj,[{"devid",<<"1.1.1">>},
-            %%       {"devtype",<<"SERVICE_SRV_PHY">>},
-            %%       {"rpttime",<<"2014-11-19/16:43:47">>},
-            %%       {"eventid",<<"EV_PFMINFO_CPU">>}]}
-            %%       {"cpuinfo",
-            %%           {obj,[{"cpuusage",0},
-            %%                 {"coreinfo",
-            %%                     [{obj,[{"cpucore1",100}]},
-            %%                      {obj,[{"cpucore2",10}]},
-            %%                      {obj,[{"cpucore3",20}]},
-            %%                      {obj,[{"cpucore4",30}]},
-            %%                      {obj,[{"cpucore5",40}]},
-            %%                      {obj,[{"cpucore6",50}]},
-            %%                      {obj,[{"cpucore7",60}]},
-            %%                      {obj,[{"cpucore8",70}]}]},
-            %%                 {"cpucorecount",8}]}},
+                    %% 向 Redis 表 collector 中保存 collectorid
+                    case gen_server:call(RedisTask, {add_collectorid, CollectorID}, infinity) of
+                        {error, PhyDevOnlineErr1} ->
+                            lager:warning("[nms_task_control] 'SADD collector ~p' -- Failed! Error '~p'~n", 
+                                [CollectorID, PhyDevOnlineErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD collector ~p' -- Success!~n", [CollectorID])
+                    end,
 
-            CPUInfo   = rfc4627:get_field(JsonObj, "cpuinfo", undefined),
-            CoreNum = rfc4627:get_field(CPUInfo, "cpucorecount", 0),
-            CoreInfo  = rfc4627:get_field(CPUInfo, "coreinfo", undefined),
+                    %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
+                    case gen_server:call(RedisTask, {add_collector_dev_map, CollectorID, DevGuid, DevType}, infinity) of
+                        {error, PhyDevOnlineErr2} ->
+                            lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
+                                [CollectorID, PhyDevOnlineErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
+                                [CollectorID, DevType, DevGuid])
+                    end,
 
-            %% 将每个 CPU 的使用率写入 cpu_statistic 统计表
-            %%[begin
-            %%    case gen_server:call(MySQLTask, {add_cpu_statistic, DomainMoid, DevMoid, list_to_integer(N), Cpu, 
-            %%            StatisticTime}, infinity) of
-            %%        {ok, success} ->
-            %%            lager:info("[nms_task_control] 'INSERT INTO cpu_statistic' -- Success! Index:~p~n", [N]);
-            %%        {error, CpuErr0} -> %% 重复使用可能会报错
-            %%            io:format("[nms_task_control] 'INSERT INTO cpu_statistic' -- Failed! Error '~p'~n", [CpuErr0])
-            %%    end
-            %%end || {obj, [{"cpucore"++N, Cpu}]} <- CoreInfo],
+                    io:format("", []);
+                <<"EV_DEV_OFFLINE">>     ->
+                    %% 消息举例
+                    %% {obj,[{"eventid",<<"EV_DEV_OFFLINE">>},
+                    %%       {"devid",<<"111">>},
+                    %%       {"devtype",<<"SERVICE_SRV_PHY">>},
+                    %%       {"collectorid",<<"60a44c502a60">>}]}
+                    %% 
+                    lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event!~n", []),
 
-            [begin
-                gen_server:call(MySQLTask, {add_cpu_statistic, DomainMoid, DevMoid, list_to_integer(N), Cpu, 
-                        StatisticTime}, infinity)
-            end || {obj, [{"cpucore"++N, Cpu}]} <- CoreInfo],
+                    CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
+                    lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
+                    CollectorID = binary_to_list(CollectorID_),
+                    
+                    %%  删除 Redis 表 p_server:devid:online
+                    case gen_server:call(RedisTask, {del_physical_server_online, DevMoid}, infinity) of
+                        {error, PhyDevOfflineErr0} ->
+                            lager:warning("[nms_task_control] 'DEL p_server:~p:online' -- Failed! Error '~p'~n", 
+                                [DevMoid, PhyDevOfflineErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL p_server:~p:online' -- Success!~n", [DevMoid])
+                    end,
 
+                    %%  删除 Redis 表 p_server:devid:resource
+                    case gen_server:call(RedisTask, {del_physical_server_resource, DevMoid}, infinity) of
+                        {error, PhyDevOfflineErr1} ->
+                            lager:warning("[nms_task_control] 'DEL p_server:~p:resource' -- Failed! Error '~p'~n", 
+                                [DevMoid, PhyDevOfflineErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL p_server:~p:resource' -- Success!~n", [DevMoid])
+                    end,
 
-            %% 查询保存 CPU 阈值信息的表 resource_limit
-            Cpu_Threshold = case gen_server:call(RedisTask, {get_server_cpu_limit}, infinity) of
-                {error, CpuErr1} ->
-                    lager:warning("[nms_task_control] 'GET server_cpu_limit' -- Failed! Error '~p'~n", [CpuErr1]),
-                    case gen_server:call(MySQLTask, {get_server_cpu_limit}, infinity) of
-                        {ok, CpuValFromMySQL} ->
-                            lager:info("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Success! Value '~p'~n", 
-                                [CpuValFromMySQL]),
-                            CpuValFromMySQL;
-                        _ ->
-                            lager:warning("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Failed! 
-                                Use ~p by default!~n", [?CPU_THRESHOLD_DEFAULT]),
-                            ?CPU_THRESHOLD_DEFAULT
-                    end;
-                {ok, CpuValFromRedis} ->
-                    lager:info("[nms_task_control] 'GET server_cpu_limit' -- Success! Value(~p)~n", [CpuValFromRedis]),
-                    CpuValFromRedis
-            end,
-            
-            CpuPctList = [ Pct || {obj, [{_, Pct}]} <- CoreInfo],
+                    %%  删除 Redis 表 p_server:devid:warning
+                    case gen_server:call(RedisTask, {del_physical_server_warning_all, DevMoid}, infinity) of
+                        {error, PhyDevOfflineErr2} ->
+                            lager:warning("[nms_task_control] 'DEL p_server:~p:warning' -- Failed! Error '~p'~n", 
+                                [DevMoid, PhyDevOfflineErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL p_server:~p:warning' -- Success!~n", [DevMoid])
+                    end,
 
-            %% 判定当前多核 CPU 的单核使用率是否触发告警状态
-            Predicate = fun(V) -> 
-                            V >= list_to_integer(binary_to_list(Cpu_Threshold))
-                        end,
-            CpuWarningTriggered = lists:any(Predicate, CpuPctList),
+                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
+                    case gen_server:call(RedisTask, {del_collector_dev_map, CollectorID, DevGuid, DevType}, infinity) of
+                        {error, PhyDevOnlineErr3} ->
+                            lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
+                                [CollectorID, PhyDevOnlineErr3]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
+                                [CollectorID, DevType, DevGuid])
+                    end,
 
-%% ------------------------------------------------------------
-            %% 未处理失败
-            warning_job(CpuWarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID), 
+                    io:format("", []);
+                <<"EV_PFMINFO_CPU">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1.1.1">>},
+                    %%       {"devtype",<<"SERVICE_SRV_PHY">>},
+                    %%       {"rpttime",<<"2014-11-19/16:43:47">>},
+                    %%       {"eventid",<<"EV_PFMINFO_CPU">>}]}
+                    %%       {"cpuinfo",
+                    %%           {obj,[{"cpuusage",0},
+                    %%                 {"coreinfo",
+                    %%                     [{obj,[{"cpucore1",100}]},
+                    %%                      {obj,[{"cpucore2",10}]},
+                    %%                      {obj,[{"cpucore3",20}]},
+                    %%                      {obj,[{"cpucore4",30}]},
+                    %%                      {obj,[{"cpucore5",40}]},
+                    %%                      {obj,[{"cpucore6",50}]},
+                    %%                      {obj,[{"cpucore7",60}]},
+                    %%                      {obj,[{"cpucore8",70}]}]},
+                    %%                 {"cpucorecount",8}]}},
 
-%% ------------------------------------------------------------
+                    CPUInfo   = rfc4627:get_field(JsonObj, "cpuinfo", undefined),
+                    CoreNum = rfc4627:get_field(CPUInfo, "cpucorecount", 0),
+                    CoreInfo  = rfc4627:get_field(CPUInfo, "coreinfo", undefined),
 
-            %% 保存当前多核 CPU 的平均使用率到 redis 表 p_server:devid:resource
-            CpuAverage = lists:sum(CpuPctList) div CoreNum,     
-            case gen_server:call(RedisTask, {update_physical_server_cpu_resource, 
-                        binary_to_list(DevMoid_), CpuAverage}, infinity) of
-                {error, CpuErr2} ->
-                    lager:warning("[nms_task_control] 'HMSET p_server:~p:resource cpu xx' -- Failed! Error '~p'~n", 
-                        [DevMoid, CpuErr2]);
-                {ok, _} ->
-                    lager:info("[nms_task_control] 'HMSET p_server:~p:resource cpu ~p' -- Success!~n", 
-                        [DevMoid, CpuAverage])
-            end,
+                    %% 将每个 CPU 的使用率写入 cpu_statistic 统计表
+                    %%[begin
+                    %%    case gen_server:call(MySQLTask, {add_cpu_statistic, DomainMoid, DevMoid, list_to_integer(N), Cpu, 
+                    %%            StatisticTime}, infinity) of
+                    %%        {ok, success} ->
+                    %%            lager:info("[nms_task_control] 'INSERT INTO cpu_statistic' -- Success! Index:~p~n", [N]);
+                    %%        {error, CpuErr0} -> %% 重复使用可能会报错
+                    %%            io:format("[nms_task_control] 'INSERT INTO cpu_statistic' -- Failed! Error '~p'~n", [CpuErr0])
+                    %%    end
+                    %%end || {obj, [{"cpucore"++N, Cpu}]} <- CoreInfo],
 
-            io:format("", []);
-
-        <<"EV_PFMINFO_MEM">>     ->
-            %% 消息举例
-            %% {obj,[{"devid",<<"1.1.1">>},
-            %%       {"devtype",<<"SERVICE_SRV_PHY">>},
-            %%       {"rpttime",<<"2014-11-19/16:43:47">>},
-            %%       {"eventid",<<"EV_PFMINFO_MEM">>},
-            %%       {"meminfo",
-            %%           {obj,[{"total",3645440},
-            %%                 {"userate",22},
-            %%                 {"used",2793860}]}}]}
-
-            MemInfo   = rfc4627:get_field(JsonObj, "meminfo", undefined),
-            MemTotal = rfc4627:get_field(MemInfo, "total", 0),
-            MemUsePct  = rfc4627:get_field(MemInfo, "userate", 0),
-            MemUsed  = rfc4627:get_field(MemInfo, "used", 0),
-
-            lager:info("  -->  Total = ~p~n", [MemTotal]),
-            lager:info("  -->  Userate = ~p~n", [MemUsePct]),
-            lager:info("  -->  Used = ~p~n", [MemUsed]),
-
-            io:format("~n"),
-
-            case gen_server:call(MySQLTask, {add_memory_statistic, DomainMoid, DevMoid, MemUsePct, StatisticTime}, infinity) of
-                {ok, success} ->
-                    lager:info("[nms_task_control] 'INSERT INTO memory_statistic' -- Success!");
-                {error, MemErr0} ->
-                    lager:warning("[nms_task_control] 'INSERT INTO memory_statistic' -- Failed! Error '~p'~n", [MemErr0])
-            end,
-
-            %% 查询保存 Mem 阈值信息的表 resource_limit
-            Mem_Threshold = case gen_server:call(RedisTask, {get_server_mem_limit}, infinity) of
-                {error, MemErr1} ->
-                    lager:warning("[nms_task_control] 'GET server_memory_limit' -- Failed! Error '~p'~n", [MemErr1]),
-                    case gen_server:call(MySQLTask, {get_server_mem_limit}, infinity) of
-                        {ok, MemValFromMySQL} ->
-                            lager:info("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Success! Value '~p'~n", 
-                                [MemValFromMySQL]),
-                            MemValFromMySQL;
-                        _ ->
-                            lager:warning("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Failed! 
-                                Use ~p by default!~n", [?MEM_THRESHOLD_DEFAULT]),
-                            ?MEM_THRESHOLD_DEFAULT
-                    end;
-                {ok, MemValFromRedis} ->
-                    lager:info("[nms_task_control] 'GET server_memory_limit' -- Success! Value(~p)~n", [MemValFromRedis]),
-                    MemValFromRedis
-            end,
-
-            %% 判定当前 MEM 使用率是否触发告警状态
-            MemWarningTriggered = MemUsePct >= list_to_integer(binary_to_list(Mem_Threshold)),
-
-%% ------------------------------------------------------------
-            %% 未处理失败
-            warning_job(MemWarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID), 
-
-%% ------------------------------------------------------------
-
-            %% 更新 redis 表 p_server:devid:resource
-            case gen_server:call(RedisTask, {update_physical_server_mem_resource, DevMoid, MemUsePct}, infinity) of
-                {error, MemErr2} ->
-                    lager:warning("[nms_task_control] 'HMSET p_server:~p:resource memory xx' -- Failed! Error '~p'~n", 
-                        [DevMoid, MemErr2]);
-                {ok, _} ->
-                    lager:info("[nms_task_control] 'HMSET p_server:~p:resource memory ~p' -- Success!", 
-                        [DevMoid, MemUsePct])
-            end,
-
-            io:format("", []);
-
-        <<"EV_PFMINFO_DISK">>    ->
-            %% {obj,[{"devid",<<"1.1.1">>},
-            %%       {"devtype",<<"SERVICE_SRV_PHY">>},
-            %%       {"rpttime",<<"2014-11-19/16:43:47">>},
-            %%       {"eventid",<<"EV_PFMINFO_DISK">>}]}
-            %%       {"diskinfo",
-            %%           {obj,[{"total",940193556},
-            %%                 {"userate",3},
-            %%                 {"used",28479932}]}},
-
-            DiskInfo   = rfc4627:get_field(JsonObj, "diskinfo", undefined),
-            DiskTotal = rfc4627:get_field(DiskInfo, "total", 0),
-            DiskUsePct  = rfc4627:get_field(DiskInfo, "userate", 0),
-            DiskUsed  = rfc4627:get_field(DiskInfo, "used", 0),
-
-            lager:info("  -->  Total = ~p~n", [DiskTotal]),
-            lager:info("  -->  Userate = ~p~n", [DiskUsePct]),
-            lager:info("  -->  Used = ~p~n", [DiskUsed]),
-
-            io:format("~n"),
-
-            case gen_server:call(MySQLTask, {add_disk_statistic, DomainMoid, DevMoid, DiskUsePct, StatisticTime}, infinity) of
-                {ok, success} ->
-                    lager:info("[nms_task_control] 'INSERT INTO disk_statistic' -- Success!");
-                {error, DiskErr0} ->
-                    lager:warning("[nms_task_control] 'INSERT INTO disk_statistic' -- Failed! Error '~p'~n", [DiskErr0])
-            end,
-
-            %% 查询保存 Disk 阈值信息的表 resource_limit
-            Disk_Threshold = case gen_server:call(RedisTask, {get_server_disk_limit}, infinity) of
-                {error, DiskErr1} ->
-                    lager:warning("[nms_task_control] 'GET server_disk_limit' -- Failed! Error '~p'~n", [DiskErr1]),
-                    case gen_server:call(MySQLTask, {get_server_disk_limit}, infinity) of
-                        {ok, DiskValFromMySQL} ->
-                            lager:info("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
-                                [DiskValFromMySQL]),
-                            DiskValFromMySQL;
-                        _ ->
-                            lager:warning("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Failed! 
-                                Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
-                            ?DISK_THRESHOLD_DEFAULT
-                    end;
-                {ok, DiskValFromRedis} ->
-                    lager:info("[nms_task_control] 'GET server_disk_limit' -- Success! Value(~p)~n", [DiskValFromRedis]),
-                    DiskValFromRedis
-            end,
-
-            %% 判定当前 Disk 使用率是否触发告警状态
-            DiskWarningTriggered = DiskUsePct >= list_to_integer(binary_to_list(Disk_Threshold)),
-
-%% ------------------------------------------------------------
-            %% 未处理失败
-            warning_job(DiskWarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID), 
-
-%% ------------------------------------------------------------
-
-            %% 更新 redis 表 p_server:devid:resource
-            case gen_server:call(RedisTask, {update_physical_server_disk_resource, DevMoid, DiskUsePct}, infinity) of
-                {error, DiskErr2} ->
-                    lager:warning("[nms_task_control] 'HMSET p_server:~p:resource disk xx' -- Failed! Error '~p'~n", 
-                        [DevMoid, DiskErr2]);
-                {ok, _} ->
-                    lager:info("[nms_task_control] 'HMSET p_server:~p:resource disk ~p' -- Success!", 
-                        [DevMoid, DiskUsePct])
-            end,
-
-            io:format("", []);
-
-        <<"EV_PFMINFO_NETCARD">> ->
-            %% {obj,[{"devid",<<"1.1.1">>},
-            %%       {"devtype",<<"SERVICE_SRV_PHY">>},
-            %%       {"rpttime",<<"2014-11-21/9:41:10">>},
-            %%       {"eventid",<<"EV_PFMINFO_NETCARD">>},
-            %%       {"netcardinfo",
-            %%           {obj,[{"cardcount",2},
-            %%                 {"recvpktloserate",0},
-            %%                 {"recvbytes",0},
-            %%                 {"sendbytes",0},
-            %%                 {"netcards",
-            %%                     [{obj,[{"netcard1",
-            %%                                {obj,[{"recvpktloserate",0},
-            %%                                      {"sendbytes",0},
-            %%                                      {"recvbytes",0}]}}]},
-            %%                      {obj,[{"netcard2",
-            %%                                {obj,[{"recvpktloserate",0},
-            %%                                      {"sendbytes",0},
-            %%                                      {"recvbytes",0}]}}]}]}]}}]}
-
-            NetCardInfo   = rfc4627:get_field(JsonObj, "netcardinfo", undefined),
-            CardNum = rfc4627:get_field(NetCardInfo, "cardcount", 0),
-            RecvLostPctTotal  = rfc4627:get_field(NetCardInfo, "recvpktloserate", 0),
-            RecvBytesTotal  = rfc4627:get_field(NetCardInfo, "recvbytes", 0),
-            SendBytesTotal  = rfc4627:get_field(NetCardInfo, "sendbytes", 0),
-            Netcards  = rfc4627:get_field(NetCardInfo, "netcards", 0),
-
-            lager:info("  -->  cardcount = ~p~n", [CardNum]),
-            lager:info("  -->  total recvpktloserate = ~p~n", [RecvLostPctTotal]),
-            lager:info("  -->  total recvbytes = ~p~n", [RecvBytesTotal]),
-            lager:info("  -->  total sendbytes = ~p~n", [SendBytesTotal]),
-
-            io:format("~n"),
-
-            %% 将每个 Netcard 上的发送/接收流量写入 netcard_statistic 统计表
-            %%[begin
-            %%    case gen_server:call(MySQLTask, {add_net_statistic, DomainMoid, DevMoid, list_to_integer(Index), 
-            %%            RecvBytes, SendBytes, StatisticTime}, infinity) of
-            %%        {ok, success} ->
-            %%            lager:info("[nms_task_control] 'INSERT INTO netcard_statistic' -- Success! Index:~p~n", [Index]);
-            %%        {error, NetErr0} -> %% 重复使用可能会报错
-            %%            io:format("[nms_task_control] 'INSERT INTO netcard_statistic' -- Failed! Error '~p'~n", [NetErr0])
-            %%    end
-            %%end || {obj,[{"netcard"++Index,
-            %%                 {obj,[{"recvpktloserate",_RecvLostPct},
-            %%                       {"sendbytes",SendBytes},
-            %%                       {"recvbytes",RecvBytes}]}}]} <- Netcards],
-
-            [begin
-                gen_server:call(MySQLTask, {add_net_statistic, DomainMoid, DevMoid, list_to_integer(Index), 
-                        RecvBytes, SendBytes, StatisticTime}, infinity)
-            end || {obj,[{"netcard"++Index,
-                             {obj,[{"recvpktloserate",_RecvLostPct},
-                                   {"sendbytes",SendBytes},
-                                   {"recvbytes",RecvBytes}]}}]} <- Netcards],                                           
-
-            %% 查询 Redis 保存 发送/接收流量 阈值信息的表 resource_limit
-            Net_Threshold = case gen_server:call(RedisTask, {get_server_net_limit}, infinity) of
-                {error, NetErr1} ->
-                    lager:warning("[nms_task_control] 'GET server_port_limit' -- Failed! Error '~p'~n", [NetErr1]),
-                    case gen_server:call(MySQLTask, {get_server_net_limit}, infinity) of
-                        {ok, NetValFromMySQL} ->
-                            lager:info("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
-                                [NetValFromMySQL]),
-                            NetValFromMySQL;
-                        _ ->
-                            lager:warning("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Failed! 
-                                Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
-                            ?NET_THRESHOLD_DEFAULT
-                    end;
-                {ok, NetValFromRedis} ->
-                    lager:info("[nms_task_control] 'GET server_port_limit' -- Success! Value(~p)~n", [NetValFromRedis]),
-                    NetValFromRedis
-            end,
-
-            %% 判定当前多 NetCard 网卡设备上单 NetCard 流量是否触发告警状态 - 不区分收发
-            NetTrafficList_ = [ [S,R] || {obj,[{_,{obj,[{_,_},{"sendbytes",S},{"recvbytes",R}]}}]} <- Netcards],
-            NetTrafficList = lists:flatten(NetTrafficList_),
-            Predicate = fun(V) -> 
-                            V >= list_to_integer(binary_to_list(Net_Threshold))
-                        end,
-            NetTrafficWarningTriggered = lists:any(Predicate, NetTrafficList),
-
-%% ------------------------------------------------------------
-            %% 未处理失败
-            warning_job(NetTrafficWarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID), 
-%% ------------------------------------------------------------
-
-            %% 保存 RecvBytesTotal 和 SendBytesTotal 值到 redis 表 p_server:devid:resource
-            case gen_server:call(RedisTask, {update_physical_server_net_resource, DevMoid, RecvBytesTotal, SendBytesTotal}, 
-                    infinity) of
-                {error, DiskErr2} ->
-                    lager:warning("[nms_task_control] 'HMSET p_server:~p:resource portin xx portout xx' -- Failed! Error '~p'~n", 
-                        [DevMoid, DiskErr2]);
-                {ok, _} ->
-                    lager:info("[nms_task_control] 'HMSET p_server:~p:resource portin ~p portout ~p' -- Success!~n", 
-                        [DevMoid, RecvBytesTotal, SendBytesTotal])
-            end,
+                    [begin
+                        gen_server:call(MySQLTask, {add_cpu_statistic, DomainMoid, DevMoid, list_to_integer(N), Cpu, 
+                                StatisticTime}, infinity)
+                    end || {obj, [{"cpucore"++N, Cpu}]} <- CoreInfo],
 
 
-            %% 判定当前多 NetCard 网卡设备上单 NetCard 接收丢包率是否触发告警状态
-            PacketLostPctList = [ [PacketLostPct] || {obj,[{_,{obj,[{"recvpktloserate",PacketLostPct},_,_]}}]} <- Netcards],
+                    %% 查询保存 CPU 阈值信息的表 resource_limit
+                    Cpu_Threshold = case gen_server:call(RedisTask, {get_server_cpu_limit}, infinity) of
+                        {error, CpuErr1} ->
+                            lager:warning("[nms_task_control] 'GET server_cpu_limit' -- Failed! Error '~p'~n", [CpuErr1]),
+                            case gen_server:call(MySQLTask, {get_server_cpu_limit}, infinity) of
+                                {ok, CpuValFromMySQL} ->
+                                    lager:info("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Success! Value '~p'~n", 
+                                        [CpuValFromMySQL]),
+                                    CpuValFromMySQL;
+                                _ ->
+                                    lager:warning("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Failed! 
+                                        Use ~p by default!~n", [?CPU_THRESHOLD_DEFAULT]),
+                                    ?CPU_THRESHOLD_DEFAULT
+                            end;
+                        {ok, CpuValFromRedis} ->
+                            lager:info("[nms_task_control] 'GET server_cpu_limit' -- Success! Value(~p)~n", [CpuValFromRedis]),
+                            CpuValFromRedis
+                    end,
+                    
+                    CpuPctList = [ Pct || {obj, [{_, Pct}]} <- CoreInfo],
+
+                    %% 判定当前多核 CPU 的单核使用率是否触发告警状态
+                    Predicate = fun(V) -> 
+                                    V >= list_to_integer(binary_to_list(Cpu_Threshold))
+                                end,
+                    CpuWarningTriggered = lists:any(Predicate, CpuPctList),
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    warning_job(CpuWarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID), 
+
+        %% ------------------------------------------------------------
+
+                    %% 保存当前多核 CPU 的平均使用率到 redis 表 p_server:devid:resource
+                    CpuAverage = lists:sum(CpuPctList) div CoreNum,     
+                    case gen_server:call(RedisTask, {update_physical_server_cpu_resource, 
+                                binary_to_list(DevMoid_), CpuAverage}, infinity) of
+                        {error, CpuErr2} ->
+                            lager:warning("[nms_task_control] 'HMSET p_server:~p:resource cpu xx' -- Failed! Error '~p'~n", 
+                                [DevMoid, CpuErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'HMSET p_server:~p:resource cpu ~p' -- Success!~n", 
+                                [DevMoid, CpuAverage])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_PFMINFO_MEM">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1.1.1">>},
+                    %%       {"devtype",<<"SERVICE_SRV_PHY">>},
+                    %%       {"rpttime",<<"2014-11-19/16:43:47">>},
+                    %%       {"eventid",<<"EV_PFMINFO_MEM">>},
+                    %%       {"meminfo",
+                    %%           {obj,[{"total",3645440},
+                    %%                 {"userate",22},
+                    %%                 {"used",2793860}]}}]}
+
+                    MemInfo   = rfc4627:get_field(JsonObj, "meminfo", undefined),
+                    MemTotal = rfc4627:get_field(MemInfo, "total", 0),
+                    MemUsePct  = rfc4627:get_field(MemInfo, "userate", 0),
+                    MemUsed  = rfc4627:get_field(MemInfo, "used", 0),
+
+                    lager:info("  -->  Total = ~p~n", [MemTotal]),
+                    lager:info("  -->  Userate = ~p~n", [MemUsePct]),
+                    lager:info("  -->  Used = ~p~n", [MemUsed]),
+
+                    io:format("~n"),
+
+                    case gen_server:call(MySQLTask, {add_memory_statistic, DomainMoid, DevMoid, MemUsePct, StatisticTime}, infinity) of
+                        {ok, success} ->
+                            lager:info("[nms_task_control] 'INSERT INTO memory_statistic' -- Success!");
+                        {error, MemErr0} ->
+                            lager:warning("[nms_task_control] 'INSERT INTO memory_statistic' -- Failed! Error '~p'~n", [MemErr0])
+                    end,
+
+                    %% 查询保存 Mem 阈值信息的表 resource_limit
+                    Mem_Threshold = case gen_server:call(RedisTask, {get_server_mem_limit}, infinity) of
+                        {error, MemErr1} ->
+                            lager:warning("[nms_task_control] 'GET server_memory_limit' -- Failed! Error '~p'~n", [MemErr1]),
+                            case gen_server:call(MySQLTask, {get_server_mem_limit}, infinity) of
+                                {ok, MemValFromMySQL} ->
+                                    lager:info("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Success! Value '~p'~n", 
+                                        [MemValFromMySQL]),
+                                    MemValFromMySQL;
+                                _ ->
+                                    lager:warning("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Failed! 
+                                        Use ~p by default!~n", [?MEM_THRESHOLD_DEFAULT]),
+                                    ?MEM_THRESHOLD_DEFAULT
+                            end;
+                        {ok, MemValFromRedis} ->
+                            lager:info("[nms_task_control] 'GET server_memory_limit' -- Success! Value(~p)~n", [MemValFromRedis]),
+                            MemValFromRedis
+                    end,
+
+                    %% 判定当前 MEM 使用率是否触发告警状态
+                    MemWarningTriggered = MemUsePct >= list_to_integer(binary_to_list(Mem_Threshold)),
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    warning_job(MemWarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID), 
+
+        %% ------------------------------------------------------------
+
+                    %% 更新 redis 表 p_server:devid:resource
+                    case gen_server:call(RedisTask, {update_physical_server_mem_resource, DevMoid, MemUsePct}, infinity) of
+                        {error, MemErr2} ->
+                            lager:warning("[nms_task_control] 'HMSET p_server:~p:resource memory xx' -- Failed! Error '~p'~n", 
+                                [DevMoid, MemErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'HMSET p_server:~p:resource memory ~p' -- Success!", 
+                                [DevMoid, MemUsePct])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_PFMINFO_DISK">>    ->
+                    %% {obj,[{"devid",<<"1.1.1">>},
+                    %%       {"devtype",<<"SERVICE_SRV_PHY">>},
+                    %%       {"rpttime",<<"2014-11-19/16:43:47">>},
+                    %%       {"eventid",<<"EV_PFMINFO_DISK">>}]}
+                    %%       {"diskinfo",
+                    %%           {obj,[{"total",940193556},
+                    %%                 {"userate",3},
+                    %%                 {"used",28479932}]}},
+
+                    DiskInfo   = rfc4627:get_field(JsonObj, "diskinfo", undefined),
+                    DiskTotal = rfc4627:get_field(DiskInfo, "total", 0),
+                    DiskUsePct  = rfc4627:get_field(DiskInfo, "userate", 0),
+                    DiskUsed  = rfc4627:get_field(DiskInfo, "used", 0),
+
+                    lager:info("  -->  Total = ~p~n", [DiskTotal]),
+                    lager:info("  -->  Userate = ~p~n", [DiskUsePct]),
+                    lager:info("  -->  Used = ~p~n", [DiskUsed]),
+
+                    io:format("~n"),
+
+                    case gen_server:call(MySQLTask, {add_disk_statistic, DomainMoid, DevMoid, DiskUsePct, StatisticTime}, infinity) of
+                        {ok, success} ->
+                            lager:info("[nms_task_control] 'INSERT INTO disk_statistic' -- Success!");
+                        {error, DiskErr0} ->
+                            lager:warning("[nms_task_control] 'INSERT INTO disk_statistic' -- Failed! Error '~p'~n", [DiskErr0])
+                    end,
+
+                    %% 查询保存 Disk 阈值信息的表 resource_limit
+                    Disk_Threshold = case gen_server:call(RedisTask, {get_server_disk_limit}, infinity) of
+                        {error, DiskErr1} ->
+                            lager:warning("[nms_task_control] 'GET server_disk_limit' -- Failed! Error '~p'~n", [DiskErr1]),
+                            case gen_server:call(MySQLTask, {get_server_disk_limit}, infinity) of
+                                {ok, DiskValFromMySQL} ->
+                                    lager:info("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
+                                        [DiskValFromMySQL]),
+                                    DiskValFromMySQL;
+                                _ ->
+                                    lager:warning("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Failed! 
+                                        Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
+                                    ?DISK_THRESHOLD_DEFAULT
+                            end;
+                        {ok, DiskValFromRedis} ->
+                            lager:info("[nms_task_control] 'GET server_disk_limit' -- Success! Value(~p)~n", [DiskValFromRedis]),
+                            DiskValFromRedis
+                    end,
+
+                    %% 判定当前 Disk 使用率是否触发告警状态
+                    DiskWarningTriggered = DiskUsePct >= list_to_integer(binary_to_list(Disk_Threshold)),
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    warning_job(DiskWarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID), 
+
+        %% ------------------------------------------------------------
+
+                    %% 更新 redis 表 p_server:devid:resource
+                    case gen_server:call(RedisTask, {update_physical_server_disk_resource, DevMoid, DiskUsePct}, infinity) of
+                        {error, DiskErr2} ->
+                            lager:warning("[nms_task_control] 'HMSET p_server:~p:resource disk xx' -- Failed! Error '~p'~n", 
+                                [DevMoid, DiskErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'HMSET p_server:~p:resource disk ~p' -- Success!", 
+                                [DevMoid, DiskUsePct])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_PFMINFO_NETCARD">> ->
+                    %% {obj,[{"devid",<<"1.1.1">>},
+                    %%       {"devtype",<<"SERVICE_SRV_PHY">>},
+                    %%       {"rpttime",<<"2014-11-21/9:41:10">>},
+                    %%       {"eventid",<<"EV_PFMINFO_NETCARD">>},
+                    %%       {"netcardinfo",
+                    %%           {obj,[{"netcardcount",2},
+                    %%                 {"recvpktloserate",0},
+                    %%                 {"recvkbps",0},
+                    %%                 {"sendkbps",0},
+                    %%                 {"netcards",
+                    %%                     [{obj,[{"netcard1",
+                    %%                                {obj,[{"recvpktloserate",0},
+                    %%                                      {"sendkbps",0},
+                    %%                                      {"recvkbps",0}]}}]},
+                    %%                      {obj,[{"netcard2",
+                    %%                                {obj,[{"recvpktloserate",0},
+                    %%                                      {"sendkbps",0},
+                    %%                                      {"recvkbps",0}]}}]}]}]}}]}
+
+                    NetCardInfo   = rfc4627:get_field(JsonObj, "netcardinfo", undefined),
+                    NetCardNum = rfc4627:get_field(NetCardInfo, "netcardcount", 0),
+                    RecvLostPctTotal  = rfc4627:get_field(NetCardInfo, "recvpktloserate", 0),
+                    RecvKBytesTotal  = rfc4627:get_field(NetCardInfo, "recvkbps", 0),
+                    SendKBytesTotal  = rfc4627:get_field(NetCardInfo, "sendkbps", 0),
+                    Netcards  = rfc4627:get_field(NetCardInfo, "netcards", 0),
+
+                    lager:info("  -->  netcardcount = ~p~n", [NetCardNum]),
+                    lager:info("  -->  total recvpktloserate = ~p~n", [RecvLostPctTotal]),
+                    lager:info("  -->  total recvkbps = ~p~n", [RecvKBytesTotal]),
+                    lager:info("  -->  total sendkbps = ~p~n", [SendKBytesTotal]),
+
+                    io:format("~n"),
+
+                    %% 将每个 Netcard 上的发送/接收流量写入 netcard_statistic 统计表
+                    %%[begin
+                    %%    case gen_server:call(MySQLTask, {add_net_statistic, DomainMoid, DevMoid, list_to_integer(Index), 
+                    %%            RecvBytes, SendBytes, StatisticTime}, infinity) of
+                    %%        {ok, success} ->
+                    %%            lager:info("[nms_task_control] 'INSERT INTO netcard_statistic' -- Success! Index:~p~n", [Index]);
+                    %%        {error, NetErr0} -> %% 重复使用可能会报错
+                    %%            io:format("[nms_task_control] 'INSERT INTO netcard_statistic' -- Failed! Error '~p'~n", [NetErr0])
+                    %%    end
+                    %%end || {obj,[{"netcard"++Index,
+                    %%                 {obj,[{"recvpktloserate",_RecvLostPct},
+                    %%                       {"sendbytes",SendBytes},
+                    %%                       {"recvbytes",RecvBytes}]}}]} <- Netcards],
+
+                    [begin
+                        gen_server:call(MySQLTask, {add_net_statistic, DomainMoid, DevMoid, list_to_integer(Index), 
+                                RecvKBytes, SendKBytes, StatisticTime}, infinity)
+                    end || {obj,[{"netcard"++Index,
+                                     {obj,[{"recvpktloserate",_RecvLostPct},
+                                           {"sendkbps",SendKBytes},
+                                           {"recvkbps",RecvKBytes}]}}]} <- Netcards],                                           
+
+                    %% 查询 Redis 保存 发送/接收流量 阈值信息的表 resource_limit
+                    Net_Threshold = case gen_server:call(RedisTask, {get_server_net_limit}, infinity) of
+                        {error, NetErr1} ->
+                            lager:warning("[nms_task_control] 'GET server_port_limit' -- Failed! Error '~p'~n", [NetErr1]),
+                            case gen_server:call(MySQLTask, {get_server_net_limit}, infinity) of
+                                {ok, NetValFromMySQL} ->
+                                    lager:info("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
+                                        [NetValFromMySQL]),
+                                    NetValFromMySQL;
+                                _ ->
+                                    lager:warning("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Failed! 
+                                        Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
+                                    ?NET_THRESHOLD_DEFAULT
+                            end;
+                        {ok, NetValFromRedis} ->
+                            lager:info("[nms_task_control] 'GET server_port_limit' -- Success! Value(~p)~n", [NetValFromRedis]),
+                            NetValFromRedis
+                    end,
+
+                    %% 判定当前多 NetCard 网卡设备上单 NetCard 流量是否触发告警状态 - 不区分收发
+                    NetTrafficList_ = [ [S,R] || {obj,[{_,{obj,[{_,_},{"sendkbps",S},{"recvkbps",R}]}}]} <- Netcards],
+                    NetTrafficList = lists:flatten(NetTrafficList_),
+                    Predicate = fun(V) -> 
+                                    V >= list_to_integer(binary_to_list(Net_Threshold))
+                                end,
+                    NetTrafficWarningTriggered = lists:any(Predicate, NetTrafficList),
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    warning_job(NetTrafficWarningTriggered,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID), 
+        %% ------------------------------------------------------------
+
+                    %% 保存 RecvBytesTotal 和 SendBytesTotal 值到 redis 表 p_server:devid:resource
+                    case gen_server:call(RedisTask, {update_physical_server_net_resource, DevMoid, RecvKBytesTotal, SendKBytesTotal}, 
+                            infinity) of
+                        {error, DiskErr2} ->
+                            lager:warning("[nms_task_control] 'HMSET p_server:~p:resource portin xx portout xx' -- Failed! Error '~p'~n", 
+                                [DevMoid, DiskErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'HMSET p_server:~p:resource portin ~p portout ~p' -- Success!~n", 
+                                [DevMoid, RecvKBytesTotal, SendKBytesTotal])
+                    end,
+
+
+                    %% 判定当前多 NetCard 网卡设备上单 NetCard 接收丢包率是否触发告警状态
+                    PacketLostPctList = [ PacketLostPct || {obj,[{_,{obj,[{"recvpktloserate",PacketLostPct},_,_]}}]} <- Netcards],
 
             %% 判定否超过 5% 和 10% -- 分别对应告警码 2013 和 2014
             Fun10 = fun(V10) -> V10 >= 10 end,                    
             Pct10 = lists:any(Fun10, PacketLostPctList),
 
-%% ------------------------------------------------------------
-            %% 未处理失败
-            warning_job(Pct10,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID,2014),
-%% ------------------------------------------------------------ 
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    warning_job(Pct10,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID,2014),
+        %% ------------------------------------------------------------ 
 
-            Fun5 = fun(V5) -> V5 >= 5 end,
-            Pct5 = lists:any(Fun5, PacketLostPctList),
+                    Fun5 = fun(V5) -> V5 >= 5 end,
+                    Pct5 = lists:any(Fun5, PacketLostPctList),
 
-%% ------------------------------------------------------------
-            %% 未处理失败
-            warning_job(Pct5,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID,2013),     
-%% ------------------------------------------------------------               
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    warning_job(Pct5,MySQLTask,RedisTask,DevMoid,DomainMoid,StatisticTime,EventID,2013),     
+        %% ------------------------------------------------------------               
 
-            io:format("", [])
+                    io:format("", []);
+                OtherEvent     ->
+                    lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
+            end;
+
+        {error,<<"Key Error">>} ->
+            lager:warning("[nms_task_control] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
+            throw(redis_key_error);
+        {error, no_connection} ->
+            lager:error("[nms_task_control] lost redis connection!"),
+            throw(redis_connection_lost)
     end.
 
 
-terminal_device_proc(_JsonObj, _RedisTask, _MySQLTask) ->
-    void.
+logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
+    DevGuid_ = rfc4627:get_field(JsonObj, "devid", undefined),
+    lager:info("  -->  DevGuid = ~p~n", [DevGuid_]),
+    DevGuid = binary_to_list(DevGuid_),
 
-logical_device_proc(_JsonObj, _RedisTask, _MySQLTask) ->
-    void.
+    %% rpttime 格式 year-month-day/hour:min:sec
+    StatisticTime_ = rfc4627:get_field(JsonObj, "rpttime", undefined),
+    case StatisticTime_ of
+        undefined ->
+            {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
+            StatisticTime = integer_to_list(Year)++"-"++integer_to_list(Month)++"-"++integer_to_list(Day)++"/"++
+                            integer_to_list(Hour)++":"++integer_to_list(Min)++":"++integer_to_list(Sec),
+            lager:info("[nms_task_control] physical_device_proc => find no rpttime, so make it myself:~p~n", 
+                [StatisticTime]);
+        _ ->
+            StatisticTime = binary_to_list(StatisticTime_)
+    end,
+    lager:info("  -->  StatisticTime = ~p~n", [StatisticTime]),
+
+    EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
+    lager:info("  -->  EventID = ~p~n", [EventID]),
+
+    %% 通过 "devid" 在 redis 中查询当前逻辑设备所属的域 ID
+    case gen_server:call(RedisTask, {get_logic_server_info_by_guid, DevGuid_}, infinity) of
+        { ok, {DevMoid_, DevGuid_, PServerMoid, DomainMoid_, DevName, IP, Type} } ->
+            lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
+            lager:info("  -->  PServerMoid = ~p~n", [PServerMoid]),
+            lager:info("  -->  DomainMoid = ~p~n", [DomainMoid_]),
+            lager:info("  -->  DevName = ~p~n", [DevName]),
+            lager:info("  -->  IP = ~p~n", [IP]),
+            lager:info("  -->  Type = ~p~n", [Type]),
+
+            DevMoid = binary_to_list(DevMoid_),
+            _DomainMoid = binary_to_list(DomainMoid_),
+
+            DevType_ = rfc4627:get_field(JsonObj, "devtype", undefined),
+            DevType = binary_to_list(DevType_),
+
+            %% 通过 "eventid" 判定为信息类型
+            case EventID of
+                <<"EV_DEV_ONLINE">>     ->
+                    %% 消息举例
+                    %% {obj,[{"eventid",<<"EV_DEV_ONLINE">>},
+                    %%       {"devid",<<"1111">>},
+                    %%       {"devtype",<<"SERVICE_TS_SRV_MPCD">>},
+                    %%       {"collectorid",<<"60a44c502a60">>}]}
+                    %% 
+                    lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event!~n", []),
+
+                    CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
+                    lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
+                    CollectorID = binary_to_list(CollectorID_),
+                    
+                    %%  设置 Redis 表 l_server:devid:online 的值为 online
+                    case gen_server:call(RedisTask, {add_logic_server_online, DevMoid}, infinity) of
+                        {error, LogDevOnlineErr0} ->
+                            lager:warning("[nms_task_control] 'SET l_server:~p:online online' -- Failed! Error '~p'~n", 
+                                [DevMoid, LogDevOnlineErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SET l_server:~p:online online' -- Success!~n", [DevMoid])
+                    end,
+
+                    %% 向 Redis 的 SET 表 collector 中保存 collectorid
+                    case gen_server:call(RedisTask, {add_collectorid, CollectorID}, infinity) of
+                        {error, LogDevOnlineErr1} ->
+                            lager:warning("[nms_task_control] 'SADD collector ~p' -- Failed! Error '~p'~n", 
+                                [CollectorID, LogDevOnlineErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD collector ~p' -- Success!~n", [CollectorID])
+                    end,
+
+                    %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
+                    case gen_server:call(RedisTask, {add_collector_dev_map, CollectorID, DevGuid, DevType}, infinity) of
+                        {error, LogDevOnlineErr2} ->
+                            lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
+                                [CollectorID, LogDevOnlineErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
+                                [CollectorID, DevType, DevGuid])
+                    end,
+
+                    io:format("", []);
+                <<"EV_DEV_OFFLINE">>     ->
+                    %% 消息举例
+                    %% {obj,[{"eventid",<<"EV_DEV_OFFLINE">>},
+                    %%       {"devid",<<"1111">>},
+                    %%       {"devtype",<<"SERVICE_TS_SRV_MPCD">>},
+                    %%       {"collectorid",<<"60a44c502a60">>}]}
+                    %% 
+                    lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event!~n", []),
+
+                    CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
+                    lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
+                    CollectorID = binary_to_list(CollectorID_),
+                    
+                    %%  删除 Redis 表 l_server:devid:online
+                    case gen_server:call(RedisTask, {del_logic_server_online, DevMoid}, infinity) of
+                        {error, LogDevOfflineErr0} ->
+                            lager:warning("[nms_task_control] 'DEL l_server:~p:online' -- Failed! Error '~p'~n", 
+                                [DevMoid, LogDevOfflineErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL l_server:~p:online' -- Success!~n", [DevMoid])
+                    end,
+
+                    %%  删除 Redis 表 l_server:devid:connection
+                    case gen_server:call(RedisTask, {del_logic_server_connections, DevMoid}, infinity) of
+                        {error, LogDevOfflineErr1} ->
+                            lager:warning("[nms_task_control] 'DEL l_server:~p:connection' -- Failed! Error '~p'~n", 
+                                [DevMoid, LogDevOfflineErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL l_server:~p:connection' -- Success!~n", [DevMoid])
+                    end,
+
+                    %%  删除 Redis 表 l_server:devid:warning
+                    case gen_server:call(RedisTask, {del_logic_server_warning_all, DevMoid}, infinity) of
+                        {error, LogDevOfflineErr2} ->
+                            lager:warning("[nms_task_control] 'DEL l_server:~p:warning' -- Failed! Error '~p'~n", 
+                                [DevMoid, LogDevOfflineErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL l_server:~p:warning' -- Success!~n", [DevMoid])
+                    end,
+
+                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
+                    case gen_server:call(RedisTask, {del_collector_dev_map, CollectorID, DevGuid, DevType}, infinity) of
+                        {error, LogDevOfflineErr3} ->
+                            lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
+                                [CollectorID, LogDevOfflineErr3]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
+                                [CollectorID, DevType, DevGuid])
+                    end,
+
+                    io:format("", []);
+                OtherEvent     ->
+                    lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
+            end;
+
+        {error,<<"Key Error">>} ->
+            lager:warning("[nms_task_control] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
+            throw(redis_key_error);
+        {error, no_connection} ->
+            lager:error("[nms_task_control] lost redis connection!"),
+            throw(redis_connection_lost)
+    end.
+
+
+terminal_device_proc(JsonObj, RedisTask, _MySQLTask) ->
+    DevMoid_ = rfc4627:get_field(JsonObj, "devid", undefined),
+    lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
+    DevMoid = binary_to_list(DevMoid_),
+
+    %% rpttime 格式 year-month-day/hour:min:sec
+    StatisticTime_ = rfc4627:get_field(JsonObj, "rpttime", undefined),
+    case StatisticTime_ of
+        undefined ->
+            {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
+            StatisticTime = integer_to_list(Year)++"-"++integer_to_list(Month)++"-"++integer_to_list(Day)++"/"++
+                            integer_to_list(Hour)++":"++integer_to_list(Min)++":"++integer_to_list(Sec),
+            lager:info("[nms_task_control] physical_device_proc => find no rpttime, so make it myself:~p~n", 
+                [StatisticTime]);
+        _ ->
+            StatisticTime = binary_to_list(StatisticTime_)
+    end,
+    lager:info("  -->  StatisticTime = ~p~n", [StatisticTime]),
+
+    EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
+    lager:info("  -->  EventID = ~p~n", [EventID]),
+
+    %% 通过 "devid" 在 redis 中查询当前终端设备所属的域 ID
+    case gen_server:call(RedisTask, {get_terminal_base_info, DevMoid_}, infinity) of
+        { ok, {DevMoid_, DomainMoid_, DevName, E164} } ->
+            lager:info("  -->  DomainMoid = ~p~n", [DomainMoid_]),
+            lager:info("  -->  DevName = ~p~n", [DevName]),
+            lager:info("  -->  E164 = ~p~n", [E164]),
+
+            DevMoid = binary_to_list(DevMoid_),
+            _DomainMoid = binary_to_list(DomainMoid_),
+
+            DevType_ = rfc4627:get_field(JsonObj, "devtype", undefined),
+            DevType = binary_to_list(DevType_),
+
+            %% 通过 "eventid" 判定为信息类型
+            case EventID of
+                <<"EV_DEV_ONLINE">>     ->
+                    %% 消息举例
+                    %% {obj,[{"eventid",<<"EV_DEV_ONLINE">>},
+                    %%       {"devid",<<"1.2.1">>},
+                    %%       {"devtype",<<"SERVICE_KDV_MT_TS6610">>},
+                    %%       {"collectorid",<<"60a44c502a60">>}]}
+                    %% 
+                    lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event!~n", []),
+
+                    CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
+                    lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
+                    CollectorID = binary_to_list(CollectorID_),
+                    
+                    %%  设置 Redis 表 terminal:devid:online 的值为 online
+                    case gen_server:call(RedisTask, {add_terminal_online, DevMoid}, infinity) of
+                        {error, TerDevOnlineErr0} ->
+                            lager:warning("[nms_task_control] 'SET terminal:~p:online online' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevOnlineErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SET terminal:~p:online online' -- Success!~n", [DevMoid])
+                    end,
+
+                    %% 向 Redis 的 SET 表 collector 中保存 collectorid
+                    case gen_server:call(RedisTask, {add_collectorid, CollectorID}, infinity) of
+                        {error, TerDevOnlineErr1} ->
+                            lager:warning("[nms_task_control] 'SADD collector ~p' -- Failed! Error '~p'~n", 
+                                [CollectorID, TerDevOnlineErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD collector ~p' -- Success!~n", [CollectorID])
+                    end,
+
+                    %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
+                    case gen_server:call(RedisTask, {add_collector_dev_map, CollectorID, DevMoid, DevType}, infinity) of
+                        {error, TerDevOnlineErr2} ->
+                            lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
+                                [CollectorID, TerDevOnlineErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
+                                [CollectorID, DevType, DevMoid])
+                    end,
+
+                    io:format("", []);
+                <<"EV_DEV_OFFLINE">>     ->
+                    %% 消息举例
+                    %% {obj,[{"eventid",<<"EV_DEV_OFFLINE">>},
+                    %%       {"devid",<<"1111">>},
+                    %%       {"devtype",<<"SERVICE_TS_SRV_MPCD">>},
+                    %%       {"collectorid",<<"60a44c502a60">>}]}
+                    %% 
+                    lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event!~n", []),
+
+                    CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
+                    lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
+                    CollectorID = binary_to_list(CollectorID_),
+                    
+                    %%  删除 Redis 表 terminal:devid:online
+                    case gen_server:call(RedisTask, {del_terminal_online, DevMoid}, infinity) of
+                        {error, TerDevOfflineErr0} ->
+                            lager:warning("[nms_task_control] 'DEL terminal:~p:online' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevOfflineErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL terminal:~p:online' -- Success!~n", [DevMoid])
+                    end,
+
+                    %%  删除 Redis 表 terminal:devid:connection
+                    case gen_server:call(RedisTask, {del_terminal_connections, DevMoid}, infinity) of
+                        {error, TerDevOfflineErr1} ->
+                            lager:warning("[nms_task_control] 'DEL terminal:~p:connection' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevOfflineErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL terminal:~p:connection' -- Success!~n", [DevMoid])
+                    end,
+
+                    %%  删除 Redis 表 terminal:devid:resource
+                    case gen_server:call(RedisTask, {del_terminal_resource, DevMoid}, infinity) of
+                        {error, TerDevOfflineErr2} ->
+                            lager:warning("[nms_task_control] 'DEL terminal:~p:resource' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevOfflineErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL terminal:~p:resource' -- Success!~n", [DevMoid])
+                    end,
+
+                    %%  删除 Redis 表 terminal:devid:warning
+                    case gen_server:call(RedisTask, {del_terminal_warning_all, DevMoid}, infinity) of
+                        {error, TerDevOfflineErr3} ->
+                            lager:warning("[nms_task_control] 'DEL terminal:~p:warning' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevOfflineErr3]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL terminal:~p:warning' -- Success!~n", [DevMoid])
+                    end,
+
+                    %%  删除 Redis 表 terminal:devid:runninginfo
+                    case gen_server:call(RedisTask, {del_terminal_running_info, DevMoid}, infinity) of
+                        {error, TerDevOfflineErr4} ->
+                            lager:warning("[nms_task_control] 'DEL terminal:~p:runninginfo' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevOfflineErr4]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL terminal:~p:runninginfo' -- Success!~n", [DevMoid])
+                    end,
+
+                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
+                    case gen_server:call(RedisTask, {del_collector_dev_map, CollectorID, DevMoid, DevType}, infinity) of
+                        {error, TerDevOfflineErr5} ->
+                            lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
+                                [CollectorID, TerDevOfflineErr5]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
+                                [CollectorID, DevType, DevMoid])
+                    end,
+
+                    io:format("", []);
+                OtherEvent     ->
+                    lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
+            end;
+
+        {error,<<"Key Error">>} ->
+            lager:warning("[nms_task_control] get <<\"Key Error\">> for key ~p~n", [DevMoid]),
+            throw(redis_key_error);
+        {error, no_connection} ->
+            lager:error("[nms_task_control] lost redis connection!"),
+            throw(redis_connection_lost)
+    end.
 
 collector_offline_proc(_JsonObj, _RedisTask, _MySQLTask) ->
     void.
@@ -784,17 +1180,17 @@ msg_parser(JsonObj, #state{redis_task=RedisTask, mysql_task=MySQLTask}) ->
             physical_device_proc(JsonObj, RedisTask, MySQLTask),
             lager:notice("<=============== PHYSICAL DEVICE ===============>"),
             io:format("", []);
-        {terminal, Type} ->
-            lager:info("Devtype => {terminal, ~p}~n", [Type]),
-            lager:notice("<=============== TERMINAL DEVICE ===============>"),
-            terminal_device_proc(JsonObj, RedisTask, MySQLTask),
-            lager:notice("<=============== TERMINAL DEVICE ===============>"),
-            io:format("", []);
         {logical, Type}  ->
             lager:info("Devtype => {logical, ~p}~n", [Type]),
             lager:notice("<=============== LOGICAL DEVICE ===============>"),
             logical_device_proc(JsonObj, RedisTask, MySQLTask),
             lager:notice("<=============== LOGICAL DEVICE ===============>"),
+            io:format("", []);
+        {terminal, Type} ->
+            lager:info("Devtype => {terminal, ~p}~n", [Type]),
+            lager:notice("<=============== TERMINAL DEVICE ===============>"),
+            terminal_device_proc(JsonObj, RedisTask, MySQLTask),
+            lager:notice("<=============== TERMINAL DEVICE ===============>"),
             io:format("", []);
         {collector, offline}  ->
             lager:info("Devtype => {collector, offline}~n", []),

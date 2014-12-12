@@ -35,66 +35,239 @@ init([Args]) ->
             {stop, {connection_error, Reason}}
     end.
 
-handle_call( {del_physical_server_warning, DevMoid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
+
+
+handle_call( {del_terminal_running_info, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = physical_server_handler:del_physical_server_warning(RedisCon,DevMoid,WarningCode),
+            Result = terminal_handler:del_terminal_running_info(RedisCon,DevMoid),
             {reply, Result, State}
     end;
 
-handle_call( {add_physical_server_warning, DevMoid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
+handle_call( {del_terminal_warning_all, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = physical_server_handler:add_physical_server_warning(RedisCon,DevMoid,WarningCode),
+            Result = terminal_handler:del_terminal_warning_all(RedisCon,DevMoid),
             {reply, Result, State}
     end;
 
-handle_call( {update_physical_server_net_resource, DevMoid, PortIn, PortOut}, _From, #state{redis_con=RedisCon}=State ) ->
+handle_call( {del_terminal_resource, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = physical_server_handler:update_physical_server_net_resource(RedisCon,DevMoid,PortIn,PortOut),
+            Result = terminal_handler:del_terminal_resource(RedisCon,DevMoid),
             {reply, Result, State}
     end;
 
-handle_call( {update_physical_server_mem_resource, DevMoid, Mem}, _From, #state{redis_con=RedisCon}=State ) ->
+handle_call( {del_terminal_connections, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = physical_server_handler:update_physical_server_mem_resource(RedisCon,DevMoid,Mem),
+            Result = terminal_handler:del_terminal_connections(RedisCon,DevMoid),
             {reply, Result, State}
     end;
 
-handle_call( {update_physical_server_disk_resource, DevMoid, Disk}, _From, #state{redis_con=RedisCon}=State ) ->
+handle_call( {del_terminal_online, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = physical_server_handler:update_physical_server_disk_resource(RedisCon,DevMoid,Disk),
+            Result = terminal_handler:add_terminal_online(RedisCon,DevMoid),
             {reply, Result, State}
     end;
 
-handle_call( {update_physical_server_cpu_resource, DevMoid, Cpu}, _From, #state{redis_con=RedisCon}=State ) ->
+handle_call( {add_terminal_online, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = physical_server_handler:update_physical_server_cpu_resource(RedisCon,DevMoid,Cpu),
+            Result = terminal_handler:add_terminal_online(RedisCon,DevMoid),
             {reply, Result, State}
     end;
 
-handle_call( {get_physical_server_info, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
+handle_call( {get_terminal_base_info, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            case physical_server_handler:get_physical_server_info(RedisCon,DevMoid) of
+            Result = terminal_handler:get_terminal_base_info(RedisCon,DevMoid),
+            {reply, Result, State}
+    end;
+
+handle_call( {get_logic_server_info_by_guid, DevGuid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:get_logic_server_info_by_guid(RedisCon,DevGuid),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_logic_server_warning_all, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:del_logic_server_warning_all(RedisCon,DevMoid),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_logic_server_connections, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:del_logic_server_connections(RedisCon,DevMoid),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_logic_server_online, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:del_logic_server_online(RedisCon,DevMoid),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_logic_server_online, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:add_logic_server_online(RedisCon,DevMoid),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_collectorid, CollectorID}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:add_collectorid(RedisCon,CollectorID),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_collector_dev_map, CollectorID, DevGuid, DevType}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:del_collector_dev_map(RedisCon,CollectorID,DevGuid,DevType),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_collector_dev_map, CollectorID, DevGuid, DevType}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:add_collector_dev_map(RedisCon,CollectorID,DevGuid,DevType),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_physical_server_warning_all, DevGuid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:del_physical_server_warning_all(RedisCon,DevGuid),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_physical_server_resource, DevGuid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:del_physical_server_resource(RedisCon,DevGuid),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_physical_server_online, DevGuid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:del_physical_server_online(RedisCon,DevGuid),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_physical_server_online, DevGuid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:add_physical_server_online(RedisCon,DevGuid),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_physical_server_warning, DevGuid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:del_physical_server_warning(RedisCon,DevGuid,WarningCode),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_physical_server_warning, DevGuid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:add_physical_server_warning(RedisCon,DevGuid,WarningCode),
+            {reply, Result, State}
+    end;
+
+handle_call( {update_physical_server_net_resource, DevGuid, PortIn, PortOut}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:update_physical_server_net_resource(RedisCon,DevGuid,PortIn,PortOut),
+            {reply, Result, State}
+    end;
+
+handle_call( {update_physical_server_mem_resource, DevGuid, Mem}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:update_physical_server_mem_resource(RedisCon,DevGuid,Mem),
+            {reply, Result, State}
+    end;
+
+handle_call( {update_physical_server_disk_resource, DevGuid, Disk}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:update_physical_server_disk_resource(RedisCon,DevGuid,Disk),
+            {reply, Result, State}
+    end;
+
+handle_call( {update_physical_server_cpu_resource, DevGuid, Cpu}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:update_physical_server_cpu_resource(RedisCon,DevGuid,Cpu),
+            {reply, Result, State}
+    end;
+
+handle_call( {get_physical_server_info_by_guid, DevGuid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            case physical_server_handler:get_physical_server_info_by_guid(RedisCon,DevGuid) of
                 {error,<<"Key Error">>} ->
                     { reply, {error,<<"Key Error">>}, State };
                 {DevMoid,DevGuid,DomainMoid,Name,Location,IP} ->
