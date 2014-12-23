@@ -2,31 +2,33 @@
 
 -export([update_terminal_online_count/4,
          get_terminal_online_count/3,
-		 update_web_resource_count/4,
+         get_all_terminal_online_count/2,
+         update_web_resource_count/4,
          get_web_resource_count/3,
-         add_terminal_online_statistic/7,
-         add_terminal_version_statistic/7,
-         add_cpu_statistic/6,       %% updated
-		 add_memory_statistic/5,    %% updated
-		 add_disk_statistic/5,      %% updated
-		 add_net_statistic/7,       %% updated
-		 add_web_resource_statistic/7,
-		 add_media_resource_statistic/4,
-		 add_warning_repair_statistic/6,   %% updated
+         get_all_web_resource_count/2,
+         add_terminal_online_statistic/6,
+         add_terminal_version_statistic/8,  %% updated
+         add_cpu_statistic/6,               %% updated
+         add_memory_statistic/5,            %% updated
+         add_disk_statistic/5,              %% updated
+         add_netcard_statistic/7,           %% updated
+         add_web_resource_statistic/7,
+         add_media_resource_statistic/4,
+         add_warning_repair_statistic/6,    %% updated
          get_terminal_online_statistic/3,
-		 get_terminal_version_statistic/2,
+         get_terminal_version_statistic/2,
          get_cpu_statictic/4,
-		 get_memory_statictic/4,
-		 get_disk_statictic/4,
-		 get_netcard_statictic/4,
-		 get_web_resource_statistic/3,
-		 get_media_resource_statistic/3,
-		 get_warning_repair_statistic/3,
-		 get_warning_repair_statistic/4,
-		 get_warning_repair_statistic/5]).
+         get_memory_statictic/4,
+         get_disk_statictic/4,
+         get_netcard_statictic/4,
+         get_web_resource_statistic/3,
+         get_media_resource_statistic/3,
+         get_warning_repair_statistic/3,
+         get_warning_repair_statistic/4,
+         get_warning_repair_statistic/5]).
 	
 %% 更新终端在线数量(字符串类型数据)
-%% 返回值: {ok,<<"1">>} | {error,<<"Invalid type">>}
+%% 返回值: {ok,<<"OK">>} | {error,<<"Invalid type">>}
 -spec update_terminal_online_count(pid(),string(),atom(),integer()) -> {ok,binary()}|{error,binary()}.
 update_terminal_online_count(RedisClient,DomainMoid,Type,Count) ->
 	case Type of
@@ -35,9 +37,6 @@ update_terminal_online_count(RedisClient,DomainMoid,Type,Count) ->
 			eredis:q(RedisClient,["SET",Key,Count]);
 		sip ->
 			Key = "domain:"++DomainMoid++":siponlie",
-			eredis:q(RedisClient,["SET",Key,Count]);
-		tip ->
-			Key = "domain:"++DomainMoid++":tiponlie",
 			eredis:q(RedisClient,["SET",Key,Count]);
 		monitor ->
 			Key = "domain:"++DomainMoid++":monitoronlie",
@@ -49,7 +48,7 @@ update_terminal_online_count(RedisClient,DomainMoid,Type,Count) ->
 			{error,<<"Invalid type">>}
 	end.
 
-%% 获取终端在线数量(字符串类型数据)
+%% 按类型获取终端在线数量(字符串类型数据)
 -spec get_terminal_online_count(pid(),string(),atom()) -> integer()|{error,binary()}.
 get_terminal_online_count(RedisClient,DomainMoid,Type) ->
 	case Type of
@@ -69,14 +68,6 @@ get_terminal_online_count(RedisClient,DomainMoid,Type) ->
 				{ok,Value} ->
 					list_to_integer(binary_to_list(Value))
 			end;
-		tip ->
-			Key = "domain:"++DomainMoid++":tiponlie",
-			case eredis:q(RedisClient,["GET",Key]) of
-				{ok,undefined} ->
-					0;
-				{ok,Value} ->
-					list_to_integer(binary_to_list(Value))
-			end;
 		monitor ->
 			Key = "domain:"++DomainMoid++":monitoronlie",
 			case eredis:q(RedisClient,["GET",Key]) of
@@ -96,9 +87,46 @@ get_terminal_online_count(RedisClient,DomainMoid,Type) ->
 		_ ->
 			{error,<<"Invalid type">>}
 	end.
+
+%% 获取所有终端的在线数量(字符串类型数据)
+-spec get_all_terminal_online_count(pid(),string()) -> {integer(),integer(),integer(),integer()}.
+get_all_terminal_online_count(RedisClient,DomainMoid) ->
+	KeyXmpp = "domain:"++DomainMoid++":xmpponlie",
+	XmppOnline = case eredis:q(RedisClient,["GET",KeyXmpp]) of
+					  {ok,undefined} ->
+						0;
+					  {ok,XmppValue} ->
+						list_to_integer(binary_to_list(XmppValue))
+				 end,
+
+	KeySip = "domain:"++DomainMoid++":siponlie",
+	SipOnline = case eredis:q(RedisClient,["GET",KeySip]) of
+					{ok,undefined} ->
+						0;
+					{ok,SipValue} ->
+						list_to_integer(binary_to_list(SipValue))
+				end,
+	
+	KeyMonitor = "domain:"++DomainMoid++":monitoronlie",
+	MonitorOnline = case eredis:q(RedisClient,["GET",KeyMonitor]) of
+						{ok,undefined} ->
+							0;
+						{ok,MonitorValue} ->
+							list_to_integer(binary_to_list(MonitorValue))
+					end,
+	
+	KeyH323 = "domain:"++DomainMoid++":h323onlie",
+	H323Online = case eredis:q(RedisClient,["GET",KeyH323]) of
+					  {ok,undefined} ->
+						 0;
+					  {ok,H323Value} ->
+						 list_to_integer(binary_to_list(H323Value))
+				  end,
+	{XmppOnline,SipOnline,MonitorOnline,H323Online}.
+		
 	
 %% 更新web并发数量(字符串类型数量)
-%% 返回值 : {ok,<<"1">>} | {error,<<"Invalid type">>}
+%% 返回值 : {ok,<<"OK">>} | {error,<<"Invalid type">>}
 -spec update_web_resource_count(pid(),string(),atom(),integer()) -> {ok,binary()}|{error,binary()}.
 update_web_resource_count(RedisClient,DomainMoid,Type,Count) ->
 	case Type of
@@ -121,7 +149,7 @@ update_web_resource_count(RedisClient,DomainMoid,Type,Count) ->
 			{error,<<"Invalid type">>}
 	end.
 
-%% 获取web并发数量(字符串类型数据)
+%% 按类型获取web并发数量(字符串类型数据)
 -spec get_web_resource_count(pid(),string(),atom()) -> integer()|{error,binary()}.
 get_web_resource_count(RedisClient,DomainMoid,Type) ->
 	case Type of
@@ -168,13 +196,59 @@ get_web_resource_count(RedisClient,DomainMoid,Type) ->
 		_ ->
 			{error,<<"Invalid type">>}
 	end.
+
+%% 获取所有的web并发数量(字符串类型数据)
+-spec get_all_web_resource_count(pid(),string()) -> {integer(),integer(),integer(),integer(),integer()}.
+get_all_web_resource_count(RedisClient,DomainMoid) ->
+	KeyAccount = "domain:"++DomainMoid++":web_resource:account_center",
+	AccountCenter = case eredis:q(RedisClient,["GET",KeyAccount]) of
+						{ok,undefined} ->
+							0;
+						{ok,AccountValue} ->
+							list_to_integer(binary_to_list(AccountValue))
+					end,
+		
+	KeyMeeting = "domain:"++DomainMoid++"::web_resource:meeting_center",
+	MeetingCenter = case eredis:q(RedisClient,["GET",KeyMeeting]) of
+						{ok,undefined} ->
+							0;
+						{ok,MeetingValue} ->
+							list_to_integer(binary_to_list(MeetingValue))
+					end,
+		
+	KeyRecord = "domain:"++DomainMoid++"::web_resource:record_service",
+	RecordService = case eredis:q(RedisClient,["GET",KeyRecord]) of
+						{ok,undefined} ->
+							0;
+						{ok,RecordValue} ->
+							list_to_integer(binary_to_list(RecordValue))
+					end,
+		
+	KeyDataMeeting = "domain:"++DomainMoid++"::web_resource:data_meeting",
+	DataMeeting = case eredis:q(RedisClient,["GET",KeyDataMeeting]) of
+						{ok,undefined} ->
+							0;
+						{ok,DataMeetingValue} ->
+							list_to_integer(binary_to_list(DataMeetingValue))
+				  end,
+	
+	KeyCommunication = "domain:"++DomainMoid++"::web_resource:communication",
+	Communication = case eredis:q(RedisClient,["GET",KeyCommunication]) of
+						{ok,undefined} ->
+							0;
+						{ok,CommunicationValue} ->
+							list_to_integer(binary_to_list(CommunicationValue))
+					end,
+
+	{AccountCenter,MeetingCenter,RecordService,DataMeeting,Communication}.
+		
 		 
 %% 添加一个终端在线统计数据
--spec add_terminal_online_statistic(string(),integer(),integer(),integer(),integer(),integer(),string()) -> {ok,success}|{error,string()}.
-add_terminal_online_statistic(DomainMoid,XmppOnline,SipOnline,TipOnline,MonitorOnline,H323Online,StatisticTime) ->
-	SQL = "INSERT INTO terminal_online_statistic VALUES(NULL,'"++DomainMoid++"',"++integer_to_list(XmppOnline)++","++integer_to_list(SipOnline)++","
-	      ++integer_to_list(TipOnline)++","++integer_to_list(MonitorOnline)++","++integer_to_list(H323Online)++",'"++StatisticTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+-spec add_terminal_online_statistic(string(),integer(),integer(),integer(),integer(),string()) -> {ok,success}|{error,string()}.
+add_terminal_online_statistic(DomainMoid,XmppOnline,SipOnline,MonitorOnline,H323Online,StatisticTime) ->
+	SQL = "INSERT INTO terminal_online_statistic VALUES(NULL,'"++DomainMoid++"',"++integer_to_list(XmppOnline)++","
+		  ++integer_to_list(SipOnline)++","++integer_to_list(MonitorOnline)++","++integer_to_list(H323Online)++",'"++StatisticTime++"');",
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -185,21 +259,21 @@ add_terminal_online_statistic(DomainMoid,XmppOnline,SipOnline,TipOnline,MonitorO
 	end.
 
 %% 添加一个终端版本统计数据
--spec add_terminal_version_statistic(string(),string(),string(),integer(),string(),string(),string()) -> {ok,success}|{error,string()}.
-add_terminal_version_statistic( DomainMoid,DevMoid,E164,Type,Oem,Version,Recommend ) ->
+-spec add_terminal_version_statistic(atom(),string(),string(),string(),string(),string(),string(),string()) -> {ok,success}|{error,string()}.
+add_terminal_version_statistic( PoolId,DomainMoid,DevMoid,E164,Type,Oem,Version,Recommend ) ->
     %% 先确定指定账号的指定终端类型的版本号是否已经存在数据库
 	%% 如果已经存在,则只更新版本号,如果不存在,则插入一行数据
 	SQL1 = "SELECT * from terminal_version_statistic WHERE domain_moid = '"++DomainMoid
-	       ++"' && device_moid = '"++DevMoid++"' && type = '"++integer_to_list(Type)++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
-	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
+	       ++"' && device_moid = '"++DevMoid++"' && type = '"++Type++"';",
+	lager:info("The SQL1 is : ~p~n",[SQL1]),
+	{result_packet,_,_,Rows,_} = emysql:execute(PoolId,list_to_binary(SQL1)),
 	case Rows of
 		[] ->
 			SQL2 = "INSERT INTO terminal_version_statistic VALUES(NULL,'"++DomainMoid
-			      ++"','"++DevMoid++"','"++E164++"','"++integer_to_list(Type)++"','"++Oem++"','"++Version++"','"++Recommend++"');",
-			io:format("The SQL2 is : ~p~n",[SQL2]),
-			Result2 = emysql:execute(nms_cache_pool,list_to_binary(SQL2)),
-			io:format("The Result2 is : ~p~n",[Result2]),
+			      ++"','"++DevMoid++"','"++E164++"','"++Type++"','"++Oem++"','"++Version++"','"++Recommend++"');",
+			lager:info("The SQL2 is : ~p~n",[SQL2]),
+			Result2 = emysql:execute(PoolId,list_to_binary(SQL2)),
+			lager:debug("The Result2 is : ~p~n",[Result2]),
 			case Result2 of
 				{error_packet,_,_,_,Msg} ->
 					{error,Msg};
@@ -207,11 +281,11 @@ add_terminal_version_statistic( DomainMoid,DevMoid,E164,Type,Oem,Version,Recomme
 					{ok,success}
 			end;
 		_ ->
-			SQL3 = "UPDATE terminal_version_statistic SET version = '"++Version++"' oem = '"++Oem++"' recommend='"++Recommend
-			++"' WHERE domain_moid='"++DomainMoid++"' && device_moid = '"++DevMoid++"' && type = '"++integer_to_list(Type)++"';",
-			io:format("The SQL3 is : ~p~n",[SQL3]),
-			Result3 = emysql:execute(nms_cache_pool,list_to_binary(SQL3)),
-			io:format("The Result3 is : ~p~n",[Result3]),
+			SQL3 = "UPDATE terminal_version_statistic SET version = '"++Version++"', oem = '"++Oem++"', recommend = '"++Recommend
+			++"' WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid++"' && type = '"++Type++"';",
+			lager:info("The SQL3 is : ~p~n",[SQL3]),
+			Result3 = emysql:execute(PoolId,list_to_binary(SQL3)),
+			lager:debug("The Result3 is : ~p~n",[Result3]),
 			case Result3 of
 				{error_packet,_,_,_,Msg2} ->
 					{error,Msg2};
@@ -224,7 +298,7 @@ add_terminal_version_statistic( DomainMoid,DevMoid,E164,Type,Oem,Version,Recomme
 -spec add_cpu_statistic(atom(),string(),string(),integer(),integer(),string()) -> {ok,success}|{error,string()}.
 add_cpu_statistic(PoolId,DomainMoid,DevMoid,CpuID,Cpu,StatisticTime) ->
 	SQL = "INSERT INTO cpu_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"++integer_to_list(CpuID)++","++integer_to_list(Cpu)++",'"++StatisticTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -238,7 +312,7 @@ add_cpu_statistic(PoolId,DomainMoid,DevMoid,CpuID,Cpu,StatisticTime) ->
 -spec add_memory_statistic(atom(), string(),string(),integer(),string()) -> {ok,success}|{error,string()}.
 add_memory_statistic(PoolId,DomainMoid,DevMoid,Memory,StatisticTime) ->
 	SQL = "INSERT INTO memory_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"++integer_to_list(Memory)++",'"++StatisticTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -252,7 +326,7 @@ add_memory_statistic(PoolId,DomainMoid,DevMoid,Memory,StatisticTime) ->
 -spec add_disk_statistic(atom(),string(),string(),integer(),string()) -> {ok,success}|{error,string()}.	
 add_disk_statistic(PoolId,DomainMoid,DevMoid,Disk,StatisticTime) ->
 	SQL = "INSERT INTO disk_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"++integer_to_list(Disk)++",'"++StatisticTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -263,11 +337,11 @@ add_disk_statistic(PoolId,DomainMoid,DevMoid,Disk,StatisticTime) ->
 	end.
 	
 %% 添加一个物理设备的网卡统计数据
--spec add_net_statistic(atom(),string(),string(),integer(),integer(),integer(),string()) -> {ok,success}|{error,string()}.
-add_net_statistic(PoolId,DomainMoid,DevMoid,CardID,PortIn,PortOut,StatisticTime) ->
+-spec add_netcard_statistic(atom(),string(),string(),integer(),string(),string(),string()) -> {ok,success}|{error,string()}.
+add_netcard_statistic(PoolId,DomainMoid,DevMoid,CardID,PortIn,PortOut,StatisticTime) ->
 	SQL = "INSERT INTO netcard_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"
-	      ++integer_to_list(CardID)++","++integer_to_list(PortIn)++","++integer_to_list(PortOut)++",'"++StatisticTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	      ++integer_to_list(CardID)++","++PortIn++","++PortOut++",'"++StatisticTime++"');",
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -282,7 +356,7 @@ add_net_statistic(PoolId,DomainMoid,DevMoid,CardID,PortIn,PortOut,StatisticTime)
 add_web_resource_statistic(DomainMoid,AcountCenter,MeetingCenter,RecordService,DataMeeting,Communication,StatisticTime) ->
 	SQL = "INSERT INTO web_resource_statistic VALUES(NULL,'"++DomainMoid++"',"++integer_to_list(AcountCenter)++","++integer_to_list(MeetingCenter)++","
 	      ++integer_to_list(RecordService)++","++integer_to_list(DataMeeting)++","++integer_to_list(Communication)++",'"++StatisticTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -297,7 +371,7 @@ add_web_resource_statistic(DomainMoid,AcountCenter,MeetingCenter,RecordService,D
 add_media_resource_statistic(DomainMoid,TMeeting,PMeeting,StatisticTime) ->
 	SQL = "INSERT INTO media_resource_statistic VALUES(NULL,'"++DomainMoid++"',"++integer_to_list(TMeeting)++","
 	      ++integer_to_list(PMeeting)++",'"++StatisticTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -312,7 +386,7 @@ add_media_resource_statistic(DomainMoid,TMeeting,PMeeting,StatisticTime) ->
 add_warning_repair_statistic(PoolId,DomainMoid,DevMoid,WarningCode,Status,StatisticTime) ->
 	SQL = "INSERT INTO warning_repair_statistic VALUES(NULL,'"++DomainMoid++"','"++DevMoid++"',"
 	      ++integer_to_list(WarningCode)++",'"++Status++"','"++StatisticTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -326,7 +400,7 @@ add_warning_repair_statistic(PoolId,DomainMoid,DevMoid,WarningCode,Status,Statis
 -spec get_terminal_online_statistic(string(),string(),string()) -> list().
 get_terminal_online_statistic( DomainMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM terminal_online_statistic WHERE domain_moid = '"++DomainMoid++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -336,12 +410,12 @@ get_terminal_version_statistic( DomainMoid,Oem ) ->
     case Oem of
 		[] ->
 			SQL = "SELECT * FROM terminal_version_statistic WHERE domain_moid = '"++DomainMoid++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows;
 		_ ->
 			SQL = "SELECT * FROM terminal_version_statistic WHERE domain_moid = '"++DomainMoid++"' && oem = '"++Oem++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows
 	end.
@@ -351,7 +425,7 @@ get_terminal_version_statistic( DomainMoid,Oem ) ->
 get_cpu_statictic( DomainMoid,DevMoid,StartTime,StopTime ) ->
 	SQL = "SELECT * FROM cpu_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	      ++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -360,7 +434,7 @@ get_cpu_statictic( DomainMoid,DevMoid,StartTime,StopTime ) ->
 get_memory_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM memory_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	      ++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -369,7 +443,7 @@ get_memory_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 get_disk_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM disk_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	      ++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -378,7 +452,7 @@ get_disk_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 get_netcard_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM netcard_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	      ++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -386,7 +460,7 @@ get_netcard_statictic( DomainMoid, DevMoid, StartTime, StopTime ) ->
 -spec get_web_resource_statistic(string(),string(),string()) -> list().
 get_web_resource_statistic( DomainMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM web_resource_statistic WHERE domain_moid = '"++DomainMoid++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -394,7 +468,7 @@ get_web_resource_statistic( DomainMoid, StartTime, StopTime ) ->
 -spec get_media_resource_statistic(string(),string(),string()) -> list().
 get_media_resource_statistic( DomainMoid, StartTime, StopTime ) ->
 	SQL = "SELECT * FROM media_resource_statistic WHERE domain_moid = '"++DomainMoid++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 
@@ -403,7 +477,7 @@ get_media_resource_statistic( DomainMoid, StartTime, StopTime ) ->
 get_warning_repair_statistic( DomainMoid,StartTime,StopTime ) ->
 	SQL = "SELECT * FROM warning_repair_statistic WHERE domain_moid = '"++DomainMoid
 	++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -412,7 +486,7 @@ get_warning_repair_statistic( DomainMoid,StartTime,StopTime ) ->
 get_warning_repair_statistic( DomainMoid,DevMoid,StartTime,StopTime ) ->
 	SQL = "SELECT * FROM warning_repair_statistic WHERE domain_moid = '"++DomainMoid++"' && device_moid = '"++DevMoid
 	++"' && statistic_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	

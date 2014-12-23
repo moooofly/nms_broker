@@ -109,6 +109,49 @@ init([PoolId, Args]) ->
     end.    
 
 
+
+handle_call( {get_terminal_mem_limit}, _From, #state{pool_info=Pool,status=Status}=State ) ->
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'get_terminal_mem_limit'~n", [Pool#pool.pool_id]),
+
+    case initialize_pool_status(Pool, Status) of
+        ok ->
+            Value = system_set_handler:get_terminal_mem_limit_mysql(Pool#pool.pool_id),
+            {reply, {ok, Value}, State#state{status=on}};            
+        _ ->
+            lager:warning("[nms_mysql_task] get_terminal_mem_limit failed!~n", []),
+            {reply, pool_init_failed, State}
+    end;
+
+handle_call( {get_terminal_cpu_limit}, _From, #state{pool_info=Pool,status=Status}=State ) ->
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'get_terminal_cpu_limit'~n", [Pool#pool.pool_id]),
+
+    case initialize_pool_status(Pool, Status) of
+        ok ->
+            Value = system_set_handler:get_terminal_cpu_limit_mysql(Pool#pool.pool_id),
+            {reply, {ok, Value}, State#state{status=on}};            
+        _ ->
+            lager:warning("[nms_mysql_task] get_terminal_cpu_limit failed!~n", []),
+            {reply, pool_init_failed, State}
+    end;
+
+handle_call( {add_terminal_version_statistic, DomainMoid, DevMoid, E164, Type, Oem, Version, Recommend}, 
+        _From, #state{pool_info=Pool,status=Status}=State) ->
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_terminal_version_statistic'~n", [Pool#pool.pool_id]),
+
+    case initialize_pool_status(Pool, Status) of
+        ok ->
+            case statistic_handler:add_terminal_version_statistic(Pool#pool.pool_id, DomainMoid, 
+                    DevMoid, E164, Type, Oem, Version, Recommend) of
+                {ok,success} ->                    
+                    {reply, {ok,success}, State#state{status=on}};
+                {error, Error} ->
+                     {reply, {error, Error}, State#state{status=on}}
+            end;            
+        _ ->
+            lager:warning("[nms_mysql_task] add_terminal_version_statistic failed!~n", []),
+            {reply, pool_init_failed, State}
+    end;
+
 handle_call( {add_warning_repair_statistic, DomainMoid, DevMoid, WarningCode, WarningStatus, StatisticTime}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
     lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_warning_repair_statistic'~n", [Pool#pool.pool_id]),
@@ -216,13 +259,13 @@ handle_call( {get_device_warning_by_code, DomainMoid, DevMoid, WarningCode},
     end;
 
 
-handle_call( {add_net_statistic, DomainMoid, DevMoid, CardID, PortIn, PortOut, StatisticTime}, 
+handle_call( {add_netcard_statistic, DomainMoid, DevMoid, CardID, PortIn, PortOut, StatisticTime}, 
         _From, #state{pool_info=Pool,status=Status}=State) ->
-    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_net_statistic'~n", [Pool#pool.pool_id]),
+    lager:critical("[nms_mysql_task] PoolId(~p) <== Recv 'add_netcard_statistic'~n", [Pool#pool.pool_id]),
 
     case initialize_pool_status(Pool, Status) of
         ok ->
-            case statistic_handler:add_net_statistic(Pool#pool.pool_id, DomainMoid, 
+            case statistic_handler:add_netcard_statistic(Pool#pool.pool_id, DomainMoid, 
                     DevMoid, CardID, PortIn, PortOut, StatisticTime) of
                 {ok,success} ->                    
                     {reply, {ok,success}, State#state{status=on}};
@@ -230,7 +273,7 @@ handle_call( {add_net_statistic, DomainMoid, DevMoid, CardID, PortIn, PortOut, S
                      {reply, {error, Error}, State#state{status=on}}
             end;            
         _ ->
-            lager:warning("[nms_mysql_task] add_net_statistic failed!~n", []),
+            lager:warning("[nms_mysql_task] add_netcard_statistic failed!~n", []),
             {reply, pool_init_failed, State}
     end;
 

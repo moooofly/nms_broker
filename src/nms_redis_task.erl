@@ -36,6 +36,83 @@ init([Args]) ->
     end.
 
 
+handle_call( {del_terminal_warning, DevMoid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:del_terminal_warning(RedisCon,DevMoid,WarningCode),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_warning, DevMoid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_warning(RedisCon,DevMoid,WarningCode),
+            {reply, Result, State}
+    end;
+
+handle_call( {update_terminal_connections, DevMoid, ServerConInfoList}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            %% Result = [{ok, return_value()} | {error, Reason::binary()}] | {error, no_connection}
+            Result = terminal_handler:update_terminal_connections(RedisCon,DevMoid,ServerConInfoList),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_connections, DevMoid, ConSrvTypeInfo}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            %% Result = [{ok, return_value()} | {error, Reason::binary()}] | {error, no_connection}
+            Result = terminal_handler:add_terminal_connections(RedisCon,DevMoid,ConSrvTypeInfo),
+            {reply, Result, State}
+    end;
+
+handle_call( {get_terminal_mem_limit}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            %% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
+            Result = system_set_handler:get_terminal_mem_limit_redis(RedisCon),
+            {reply, Result, State}
+    end;
+
+handle_call( {get_terminal_cpu_limit}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            %% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
+            Result = system_set_handler:get_terminal_cpu_limit_redis(RedisCon),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_resource, DevMoid, Cpu, Disk, Memory}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_resource(RedisCon,DevMoid,Cpu,Disk,Memory),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_running_info, DevMoid, Type, IP, Version, OS, CpuType, CpuFreq, Memory}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_running_info(RedisCon,DevMoid,Type,IP,Version,OS,CpuType,CpuFreq,Memory),
+            {reply, Result, State}
+    end;
 
 handle_call( {del_terminal_running_info, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
