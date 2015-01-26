@@ -36,6 +36,44 @@ init([Args]) ->
     end.
 
 
+
+handle_call( {add_physical_ip, DevMoid, PhySerIPString}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:add_physical_ip(RedisCon,DevMoid,PhySerIPString),
+            {reply, Result, State}
+    end;
+
+
+handle_call( {add_terminal_channel_detail, DevMoid, ChannelType, ChanID, InfoList}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_channel_detail(RedisCon,DevMoid,ChannelType,ChanID,InfoList),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_meeting_channel, DevMoid, ChannelType, ChanList}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_meeting_channel(RedisCon,DevMoid,ChannelType,ChanList),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_meeting_detail, DevMoid, MT_E164, Conf_E164, ConfBitRate}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_meeting_detail(RedisCon,DevMoid,MT_E164,Conf_E164,ConfBitRate),
+            {reply, Result, State}
+    end;
+
 handle_call( {del_terminal_warning, DevMoid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
@@ -104,13 +142,44 @@ handle_call( {add_terminal_resource, DevMoid, Cpu, Disk, Memory},
             {reply, Result, State}
     end;
 
-handle_call( {add_terminal_running_info, DevMoid, Type, IP, Version, OS, CpuType, CpuFreq, Memory}, 
+handle_call( {add_terminal_bandwidth_info, DevMoid, SendBandWidth, SendDropRate, RecvBandWidth, RecvDropRate}, 
         _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = terminal_handler:add_terminal_running_info(RedisCon,DevMoid,Type,IP,Version,OS,CpuType,CpuFreq,Memory),
+            Result = terminal_handler:add_terminal_bandwidth_info(RedisCon,DevMoid,
+                SendBandWidth,SendDropRate,RecvBandWidth,RecvDropRate),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_net_info, DevMoid, TerIp, TerNatIp, TerDns}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_net_info(RedisCon,DevMoid,TerIp,TerNatIp,TerDns),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_aps_and_net_info, DevMoid, TerIp, TerNatIp, TerDns, APSDomainName, ApsIP}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_aps_and_net_info(RedisCon,DevMoid,TerIp,TerNatIp,TerDns,APSDomainName,ApsIP),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_running_info, DevMoid, Type, Version, OS, CpuType, CpuFreq, CpuNum, Memory}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:add_terminal_running_info(RedisCon,DevMoid,Type,Version,OS,CpuType,CpuFreq,CpuNum,Memory),
             {reply, Result, State}
     end;
 
@@ -231,21 +300,66 @@ handle_call( {add_collectorid, CollectorID}, _From, #state{redis_con=RedisCon}=S
             {reply, Result, State}
     end;
 
-handle_call( {del_collector_dev_map, CollectorID, DevGuid, DevType}, _From, #state{redis_con=RedisCon}=State ) ->
+handle_call( {del_collectorid, CollectorID}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = physical_server_handler:del_collector_dev_map(RedisCon,CollectorID,DevGuid,DevType),
+            Result = physical_server_handler:del_collectorid(RedisCon,CollectorID),
             {reply, Result, State}
     end;
 
-handle_call( {add_collector_dev_map, CollectorID, DevGuid, DevType}, _From, #state{redis_con=RedisCon}=State ) ->
+handle_call( {set_heartbeat_timer_by_collectorid, CollectorID, TimerRef}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            Result = physical_server_handler:add_collector_dev_map(RedisCon,CollectorID,DevGuid,DevType),
+            Result = physical_server_handler:set_heartbeat_timer_by_collectorid(RedisCon,CollectorID,TimerRef),
+            {reply, Result, State}
+    end;
+
+handle_call( {get_heartbeat_timer_by_collectorid, CollectorID}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:get_heartbeat_timer_by_collectorid(RedisCon,CollectorID),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_heartbeat_timer_by_collectorid, CollectorID}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:del_heartbeat_timer_by_collectorid(RedisCon,CollectorID),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_collector_online_device, CollectorID, DevGuid, DevType}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:add_collector_online_device(RedisCon,CollectorID,DevGuid,DevType),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_collector_online_device, CollectorID, DevGuid, DevType}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:del_collector_online_device(RedisCon,CollectorID,DevGuid,DevType),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_collector_online_device_all, CollectorID}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = physical_server_handler:del_collector_online_device_all(RedisCon,CollectorID),
             {reply, Result, State}
     end;
 

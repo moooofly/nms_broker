@@ -71,7 +71,7 @@ add_warning_code(Type,Code,Name,Level,Description,Suggestion) ->
 
 	SQL = "INSERT INTO warning_code_utf8 VALUES(NULL,'"++UType++"',"++integer_to_list(Code)++",'"++UName++"','"
 	                                        ++Level++"','"++UDescription++"','"++USuggestion++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -86,7 +86,7 @@ add_warning_code(Type,Code,Name,Level,Description,Suggestion) ->
 add_repaired_warning(PoolId, DevGuid,DevType,DomainGuid,Code,Level,Description,StartTime,ResolveTime) ->
     SQL = "INSERT INTO warning_repaired VALUES(NULL,'"++DevGuid++"',"++integer_to_list(DevType)++",'"++DomainGuid++"',"
 	                                        ++integer_to_list(Code)++",'"++Level++"','"++Description++"','"++StartTime++"','"++ResolveTime++"');",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -101,7 +101,7 @@ add_repaired_warning(PoolId, DevGuid,DevType,DomainGuid,Code,Level,Description,S
 add_unrepaired_warning(PoolId,DevGuid,DevType,DomainGuid,Code,Level,Description,StartTime) ->
     SQL = "INSERT INTO warning_unrepaired VALUES(NULL,'"++DevGuid++"',"++integer_to_list(DevType)++",'"++DomainGuid++"',"
 	                                        ++integer_to_list(Code)++",'"++Level++"','"++Description++"','"++StartTime++"',NULL);",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -115,7 +115,7 @@ add_unrepaired_warning(PoolId,DevGuid,DevType,DomainGuid,Code,Level,Description,
 -spec del_unrepaired_warning(atom(), string(),string(),integer()) -> {ok,success}|{error,string()}.
 del_unrepaired_warning(PoolId, DevGuid,DomainGuid,Code) ->
     SQL = "DELETE FROM warning_unrepaired WHERE device_moid='"++DevGuid++"' && domain_moid='"++DomainGuid++"' && code="++integer_to_list(Code)++";",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -134,7 +134,7 @@ add_sub_warning_code(DomainGuid,UserID,SubCode) ->
 	case Row of
 		[] ->
 			SQL = "INSERT INTO sub_warning_code VALUES(NULL,'"++DomainGuid++"','"++UserID++"',"++integer_to_list(SubCode)++");",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -152,7 +152,7 @@ add_sub_warning_code(DomainGuid,UserID,SubCode) ->
 -spec del_sub_warning_code(string(),string(),integer()) -> {ok,success}|{error,string()}.
 del_sub_warning_code(DomainGuid,UserID,SubCode) ->
 	SQL = "DELETE FROM sub_warning_code WHERE domain_id = '"++DomainGuid++"' && user_id='"++UserID++"' && sub_code = "++integer_to_list(SubCode)++";",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -171,7 +171,7 @@ add_warning_notify_email( DomainGuid,UserID,Email ) ->
 	case Row of
 		[] ->
 			SQL = "INSERT INTO warning_notify_email VALUES(NULL,'"++DomainGuid++"','"++UserID++"','"++Email++"');",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -189,7 +189,7 @@ add_warning_notify_email( DomainGuid,UserID,Email ) ->
 -spec del_warning_notify_email(string(),string(),string()) -> {ok,success}|{error,string()}.
 del_warning_notify_email( DomainGuid,UserID,Email ) ->
 	SQL = "DELETE FROM warning_notify_email WHERE domain_id = '"++DomainGuid++"' && user_id='"++UserID++"' && email = '"++Email++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -208,7 +208,7 @@ add_warning_notify_phone( DomainGuid,UserID,Phone ) ->
 	case Row of 
 		[] ->
 			SQL = "INSERT INTO warning_notify_phone VALUES(NULL,'"++DomainGuid++"','"++UserID++"','"++Phone++"');",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -226,7 +226,7 @@ add_warning_notify_phone( DomainGuid,UserID,Phone ) ->
 -spec del_warning_notify_phone(string(),string(),string()) -> {ok,success}|{error,string()}.
 del_warning_notify_phone( DomainGuid,UserID,Phone ) ->
 	SQL = "DELETE FROM warning_notify_phone WHERE domain_id = '"++DomainGuid++"' && user_id='"++UserID++"' && phone = '"++Phone++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -240,12 +240,12 @@ del_warning_notify_phone( DomainGuid,UserID,Phone ) ->
 -spec add_warning_terminal_guid(string(),string(),string()) -> {ok,success}|{error,string()}.
 add_warning_terminal_guid( DomainGuid,UserID,Guid ) ->
 	SQL1 = "SELECT * FROM warning_terminal_guid WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"' && guid='"++Guid++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
+	lager:info("The SQL is : ~p~n",[SQL1]),
 	{result_packet,_,_,Row,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 	case Row of
 		[] ->
 			SQL = "INSERT INTO warning_terminal_guid VALUES(NULL,'"++DomainGuid++"','"++UserID++"','"++Guid++"');",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -263,7 +263,7 @@ add_warning_terminal_guid( DomainGuid,UserID,Guid ) ->
 -spec del_warning_terminal_guid(string(),string(),string()) -> {ok,success}|{error,string()}.
 del_warning_terminal_guid( DomainGuid,UserID,Guid ) ->
 	SQL = "DELETE FROM warning_terminal_guid WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"' && guid='"++Guid++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -277,12 +277,12 @@ del_warning_terminal_guid( DomainGuid,UserID,Guid ) ->
 -spec add_warning_terminal_name(string(),string(),string()) -> {ok,success}|{error,string()}.
 add_warning_terminal_name( DomainGuid,UserID,Name ) ->
 	SQL1 = "SELECT * FROM warning_terminal_name WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"' && name='"++Name++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
+	lager:info("The SQL is : ~p~n",[SQL1]),
 	{result_packet,_,_,Row,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 	case Row of
 		[] ->
 			SQL = "INSERT INTO warning_terminal_name VALUES(NULL,'"++DomainGuid++"','"++UserID++"','"++Name++"');",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -300,7 +300,7 @@ add_warning_terminal_name( DomainGuid,UserID,Name ) ->
 -spec del_warning_terminal_name(string(),string(),string()) -> {ok,success}|{error,string()}.
 del_warning_terminal_name( DomainGuid,UserID,Name ) ->
 	SQL = "DELETE FROM warning_terminal_name WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"' && name='"++Name++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -314,12 +314,12 @@ del_warning_terminal_name( DomainGuid,UserID,Name ) ->
 -spec add_warning_server_guid(string(),string(),string()) -> {ok,success}|{error,string()}.
 add_warning_server_guid( DomainGuid,UserID,Guid ) ->
 	SQL1 = "SELECT * FROM warning_server_guid WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"' && guid='"++Guid++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
+	lager:info("The SQL is : ~p~n",[SQL1]),
 	{result_packet,_,_,Row,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 	case Row of
 		[] ->
 			SQL = "INSERT INTO warning_server_guid VALUES(NULL,'"++DomainGuid++"','"++UserID++"','"++Guid++"');",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -337,7 +337,7 @@ add_warning_server_guid( DomainGuid,UserID,Guid ) ->
 -spec del_warning_server_guid(string(),string(),string()) -> {ok,success}|{error,string()}.
 del_warning_server_guid( DomainGuid,UserID,Guid ) ->
 	SQL = "DELETE FROM warning_server_guid WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"' && guid='"++Guid++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -351,12 +351,12 @@ del_warning_server_guid( DomainGuid,UserID,Guid ) ->
 -spec add_warning_server_name(string(),string(),string()) -> {ok,success}|{error,string()}.
 add_warning_server_name( DomainGuid,UserID,Name ) ->
 	SQL1 = "SELECT * FROM warning_server_name WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"' && name='"++Name++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
+	lager:info("The SQL is : ~p~n",[SQL1]),
 	{result_packet,_,_,Row,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 	case Row of
 		[] ->
 			SQL = "INSERT INTO warning_server_name VALUES(NULL,'"++DomainGuid++"','"++UserID++"','"++Name++"');",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -374,7 +374,7 @@ add_warning_server_name( DomainGuid,UserID,Name ) ->
 -spec del_warning_server_name(string(),string(),string()) -> {ok,success}|{error,string()}.
 del_warning_server_name( DomainGuid,UserID,Name ) ->
 	SQL = "DELETE FROM warning_server_name WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"' && name='"++Name++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	Result = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Result]),
 	case Result of
@@ -388,7 +388,7 @@ del_warning_server_name( DomainGuid,UserID,Name ) ->
 -spec get_all_warning_code() -> list().
 get_all_warning_code() ->
 	SQL = "SELECT * FROM warning_code;",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	Rows.
 	
@@ -396,7 +396,7 @@ get_all_warning_code() ->
 -spec get_warning_code_detail(atom(), integer()) -> {integer(),string(),integer(),string(),string(),string(),string()}.
 get_warning_code_detail(PoolId, Code) ->
 	SQL = "SELECT * FROM warning_code WHERE code="++integer_to_list(Code)++";",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_}= emysql:execute(PoolId,list_to_binary(SQL)),
 	lager:debug("The Result is : ~p~n",[Row]),
 	[Value] = Row,
@@ -703,7 +703,7 @@ get_sub_terminal_warning( UserDomainGuid,UserID,Level,StartTime,StopTime,DomainG
 get_all_server_warning( DomainGuidList ) ->
 	Fun1 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_type!="++integer_to_list(?TERMINAL)++";",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -711,7 +711,7 @@ get_all_server_warning( DomainGuidList ) ->
 	
 	Fun2 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_type!="++integer_to_list(?TERMINAL)++";",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -725,7 +725,7 @@ get_all_server_warning( Level,DomainGuidList ) ->
 	Fun1 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_type!="++integer_to_list(?TERMINAL)
 			      ++"&& level='"++Level++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -734,7 +734,7 @@ get_all_server_warning( Level,DomainGuidList ) ->
 	Fun2 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_type!="++integer_to_list(?TERMINAL)
 			      ++"&& level='"++Level++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -748,7 +748,7 @@ get_all_server_warning( StartTime,StopTime,DomainGuidList ) ->
 	Fun1 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_type!="++integer_to_list(?TERMINAL)
 			      ++" && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -757,7 +757,7 @@ get_all_server_warning( StartTime,StopTime,DomainGuidList ) ->
 	Fun2 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_type!="++integer_to_list(?TERMINAL)
 			      ++" && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -771,7 +771,7 @@ get_all_server_warning( Level,StartTime,StopTime,DomainGuidList ) ->
 	Fun1 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_type!="++integer_to_list(?TERMINAL)
 			      ++"&& level='"++Level++"' && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -780,7 +780,7 @@ get_all_server_warning( Level,StartTime,StopTime,DomainGuidList ) ->
 	Fun2 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_type!="++integer_to_list(?TERMINAL)
 			      ++"&& level='"++Level++"' && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -793,7 +793,7 @@ get_all_server_warning( Level,StartTime,StopTime,DomainGuidList ) ->
 get_all_terminal_warning( DomainGuidList ) ->
 	Fun1 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_type="++integer_to_list(?TERMINAL)++";",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -801,7 +801,7 @@ get_all_terminal_warning( DomainGuidList ) ->
 	
 	Fun2 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_type="++integer_to_list(?TERMINAL)++";",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -815,7 +815,7 @@ get_all_terminal_warning( Level,DomainGuidList ) ->
 	Fun1 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_type="++integer_to_list(?TERMINAL)
 			      ++"&& level='"++Level++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -824,7 +824,7 @@ get_all_terminal_warning( Level,DomainGuidList ) ->
 	Fun2 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_type="++integer_to_list(?TERMINAL)
 			      ++"&& level='"++Level++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -838,7 +838,7 @@ get_all_terminal_warning( StartTime,StopTime,DomainGuidList ) ->
 	Fun1 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_type="++integer_to_list(?TERMINAL)
 			      ++" && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -847,7 +847,7 @@ get_all_terminal_warning( StartTime,StopTime,DomainGuidList ) ->
 	Fun2 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_type="++integer_to_list(?TERMINAL)
 			      ++" && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -861,7 +861,7 @@ get_all_terminal_warning( Level,StartTime,StopTime,DomainGuidList ) ->
 	Fun1 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_type="++integer_to_list(?TERMINAL)
 			      ++"&& level='"++Level++"' && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -870,7 +870,7 @@ get_all_terminal_warning( Level,StartTime,StopTime,DomainGuidList ) ->
 	Fun2 = fun( DomainGuid,Acc ) ->
 			SQL = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_type="++integer_to_list(?TERMINAL)
 			      ++"&& level='"++Level++"' && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-			lager:debug("The SQL is : ~p~n",[SQL]),
+			lager:info("The SQL is : ~p~n",[SQL]),
 			{result_packet,_,_,Rows,_}= emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 			Rows++Acc
 	      end,
@@ -884,7 +884,7 @@ get_device_warning_by_code(PoolId, DomainGuid, DevGuid, WarningCode) ->
 	SQL = "SELECT * FROM warning_unrepaired WHERE domain_moid='"++DomainGuid++"' && device_moid='"++
 				DevGuid++"' && code='"++integer_to_list(WarningCode)++"';",
 %%	SQL = "SELECT * FROM warning_unrepaired WHERE domain_moid='1.1' && device_moid='1.1.1' && code='2002';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,UnRepairedWarning,_} = emysql:execute(PoolId,list_to_binary(SQL)),
 	UnRepairedWarning.
 	
@@ -892,11 +892,11 @@ get_device_warning_by_code(PoolId, DomainGuid, DevGuid, WarningCode) ->
 -spec get_device_warning(string(),string()) -> list().
 get_device_warning( DomainGuid,DevGuid ) ->
 	SQL1 = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_id='"++DevGuid++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
+	lager:info("The SQL is : ~p~n",[SQL1]),
 	{result_packet,_,_,RepairedWarning,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 	
 	SQL2 = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_id='"++DevGuid++"';",
-	lager:debug("The SQL is : ~p~n",[SQL2]),
+	lager:info("The SQL is : ~p~n",[SQL2]),
 	{result_packet,_,_,UnRepairedWarning,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL2)),
 	
 	UnRepairedWarning++RepairedWarning.
@@ -905,11 +905,11 @@ get_device_warning( DomainGuid,DevGuid ) ->
 -spec get_device_warning(string(),string(),string()) -> list().
 get_device_warning( DomainGuid,DevGuid,Level ) ->
 	SQL1 = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_id='"++DevGuid++"' && level='"++Level++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
+	lager:info("The SQL is : ~p~n",[SQL1]),
 	{result_packet,_,_,RepairedWarning,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 	
 	SQL2 = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_id='"++DevGuid++"' && level='"++Level++"';",
-	lager:debug("The SQL is : ~p~n",[SQL2]),
+	lager:info("The SQL is : ~p~n",[SQL2]),
 	{result_packet,_,_,UnRepairedWarning,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL2)),
 	
 	UnRepairedWarning++RepairedWarning.
@@ -919,12 +919,12 @@ get_device_warning( DomainGuid,DevGuid,Level ) ->
 get_device_warning( DomainGuid,DevGuid,StartTime,StopTime ) ->
 	SQL1 = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_id='"++DevGuid
 	       ++"' && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
+	lager:info("The SQL is : ~p~n",[SQL1]),
 	{result_packet,_,_,RepairedWarning,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 	
 	SQL2 = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_id='"++DevGuid
 	       ++"' && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL2]),
+	lager:info("The SQL is : ~p~n",[SQL2]),
 	{result_packet,_,_,UnRepairedWarning,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL2)),
 	
 	UnRepairedWarning++RepairedWarning.
@@ -934,12 +934,12 @@ get_device_warning( DomainGuid,DevGuid,StartTime,StopTime ) ->
 get_device_warning( DomainGuid,DevGuid,Level,StartTime,StopTime ) ->
 	SQL1 = "SELECT * FROM warning_repaired WHERE domain_id='"++DomainGuid++"' && device_id='"++DevGuid
 	       ++"' && level='"++Level++"' && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	io:format("The SQL1 is : ~p~n",[SQL1]),
+	lager:info("The SQL is : ~p~n",[SQL1]),
 	{result_packet,_,_,RepairedWarning,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 	
 	SQL2 = "SELECT * FROM warning_unrepaired WHERE domain_id='"++DomainGuid++"' && device_id='"++DevGuid
 	       ++"' && level='"++Level++"' && start_time BETWEEN '"++StartTime++"' AND '"++StopTime++"';",
-	lager:debug("The SQL is : ~p~n",[SQL2]),
+	lager:info("The SQL is : ~p~n",[SQL2]),
 	{result_packet,_,_,UnRepairedWarning,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL2)),
 	
 	UnRepairedWarning++RepairedWarning.
@@ -948,7 +948,7 @@ get_device_warning( DomainGuid,DevGuid,Level,StartTime,StopTime ) ->
 -spec get_sub_warning_code(string(),string()) -> list().
 get_sub_warning_code( DomainGuid,UserID ) ->
 	SQL = "SELECT * FROM sub_warning_code WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	%%lager:debug("The Result is : ~p~n",[Rows]),
 	CodeList = [Code || [_,_,_,Code] <- Rows],
@@ -958,7 +958,7 @@ get_sub_warning_code( DomainGuid,UserID ) ->
 -spec get_warning_notify_email(string(),string()) -> list().
 get_warning_notify_email( DomainGuid,UserID ) ->
 	SQL = "SELECT * FROM warning_notify_email WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	%%lager:debug("The Result is : ~p~n",[Rows]),
 	EmailList = [Email || [_,_,_,Email] <- Rows],
@@ -968,7 +968,7 @@ get_warning_notify_email( DomainGuid,UserID ) ->
 -spec get_warning_notify_phone(string(),string()) -> list().
 get_warning_notify_phone( DomainGuid,UserID ) ->
 	SQL = "SELECT * FROM warning_notify_phone WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	%%lager:debug("The Result is : ~p~n",[Rows]),
 	PhoneList = [Phone || [_,_,_,Phone] <- Rows],
@@ -978,7 +978,7 @@ get_warning_notify_phone( DomainGuid,UserID ) ->
 -spec get_warning_terminal_guid(string(),string()) -> list().
 get_warning_terminal_guid( DomainGuid,UserID ) ->
 	SQL = "SELECT * FROM warning_terminal_guid WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	%%lager:debug("The Result is : ~p~n",[Rows]),
 	GuidList = [Guid || [_,_,_,Guid] <- Rows],
@@ -988,7 +988,7 @@ get_warning_terminal_guid( DomainGuid,UserID ) ->
 -spec get_warning_terminal_name(string(),string()) -> list().
 get_warning_terminal_name( DomainGuid,UserID ) ->
 	SQL = "SELECT * FROM warning_terminal_name WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	%%lager:debug("The Result is : ~p~n",[Rows]),
 	NameList = [Name || [_,_,_,Name] <- Rows],
@@ -998,7 +998,7 @@ get_warning_terminal_name( DomainGuid,UserID ) ->
 -spec get_warning_server_guid(string(),string()) -> list().
 get_warning_server_guid( DomainGuid,UserID ) ->
 	SQL = "SELECT * FROM warning_server_guid WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	%%lager:debug("The Result is : ~p~n",[Rows]),
 	GuidList = [Guid || [_,_,_,Guid] <- Rows],
@@ -1008,7 +1008,7 @@ get_warning_server_guid( DomainGuid,UserID ) ->
 -spec get_warning_server_name(string(),string()) -> list().
 get_warning_server_name( DomainGuid,UserID ) ->
 	SQL = "SELECT * FROM warning_server_name WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Rows,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	%%lager:debug("The Result is : ~p~n",[Rows]),
 	NameList = [Name || [_,_,_,Name] <- Rows],
@@ -1018,12 +1018,12 @@ get_warning_server_name( DomainGuid,UserID ) ->
 -spec enable_warning_filter(string(),string(),string()) -> {ok,success}|{error,string()}.
 enable_warning_filter( DomainGuid,UserID,Enable ) ->
 	SQL = "SELECT * FROM warning_set WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO warning_set VALUES(NULL,'"++DomainGuid++"','"++UserID++"','"++Enable++"',NULL,NULL,NULL);",
-			io:format("The SQL1 is : ~p~n",[SQL1]),
+			lager:info("The SQL is : ~p~n",[SQL1]),
 	        Result = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -1035,7 +1035,7 @@ enable_warning_filter( DomainGuid,UserID,Enable ) ->
 		_  ->
 			SQL1 = "UPDATE warning_set SET enable_filter='"++Enable
 			       ++"' WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-			io:format("The SQL1 is : ~p~n",[SQL1]),
+			lager:info("The SQL is : ~p~n",[SQL1]),
 	        Result = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -1050,12 +1050,12 @@ enable_warning_filter( DomainGuid,UserID,Enable ) ->
 -spec enable_warning_music(string(),string(),string()) -> {ok,success}|{error,string()}.
 enable_warning_music( DomainGuid,UserID,Enable ) ->
 	SQL = "SELECT * FROM warning_set WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO warning_set VALUES(NULL,'"++DomainGuid++"','"++UserID++"',NULL,'"++Enable++"',NULL,NULL);",
-			io:format("The SQL1 is : ~p~n",[SQL1]),
+			lager:info("The SQL is : ~p~n",[SQL1]),
 	        Result = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -1067,7 +1067,7 @@ enable_warning_music( DomainGuid,UserID,Enable ) ->
 		_  ->
 			SQL1 = "UPDATE warning_set SET enable_music='"++Enable
 			       ++"' WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-			io:format("The SQL1 is : ~p~n",[SQL1]),
+			lager:info("The SQL is : ~p~n",[SQL1]),
 	        Result = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -1083,12 +1083,12 @@ enable_warning_music( DomainGuid,UserID,Enable ) ->
 -spec enable_warning_email(string(),string(),string()) -> {ok,success}|{error,string()}.
 enable_warning_email( DomainGuid,UserID,Enable ) ->
 	SQL = "SELECT * FROM warning_set WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO warning_set VALUES(NULL,'"++DomainGuid++"','"++UserID++"',NULL,NULL,'"++Enable++"',NULL);",
-			io:format("The SQL1 is : ~p~n",[SQL1]),
+			lager:info("The SQL is : ~p~n",[SQL1]),
 	        Result = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -1100,7 +1100,7 @@ enable_warning_email( DomainGuid,UserID,Enable ) ->
 		_  ->
 			SQL1 = "UPDATE warning_set SET enable_email='"++Enable
 			       ++"' WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-			io:format("The SQL1 is : ~p~n",[SQL1]),
+			lager:info("The SQL is : ~p~n",[SQL1]),
 	        Result = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -1115,12 +1115,12 @@ enable_warning_email( DomainGuid,UserID,Enable ) ->
 -spec enable_warning_phone(string(),string(),string()) -> {ok,success}|{error,string()}.
 enable_warning_phone( DomainGuid,UserID,Enable ) ->
 	SQL = "SELECT * FROM warning_set WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	case Row of
 		[] ->
 			SQL1 = "INSERT INTO warning_set VALUES(NULL,'"++DomainGuid++"','"++UserID++"',NULL,NULL,NULL,'"++Enable++"');",
-			io:format("The SQL1 is : ~p~n",[SQL1]),
+			lager:info("The SQL is : ~p~n",[SQL1]),
 	        Result = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -1132,7 +1132,7 @@ enable_warning_phone( DomainGuid,UserID,Enable ) ->
 		_  ->
 			SQL1 = "UPDATE warning_set SET enable_phone='"++Enable
 			       ++"' WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-			io:format("The SQL1 is : ~p~n",[SQL1]),
+			lager:info("The SQL is : ~p~n",[SQL1]),
 	        Result = emysql:execute(nms_cache_pool,list_to_binary(SQL1)),
 			lager:debug("The Result is : ~p~n",[Result]),
 			case Result of
@@ -1147,7 +1147,7 @@ enable_warning_phone( DomainGuid,UserID,Enable ) ->
 -spec get_warning_set(string(),string()) -> {string(),string(),string(),string()}.
 get_warning_set(DomainGuid,UserID) ->
 	SQL = "SELECT * FROM warning_set WHERE domain_id='"++DomainGuid++"' && user_id='"++UserID++"';",
-	lager:debug("The SQL is : ~p~n",[SQL]),
+	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Row,_} = emysql:execute(nms_cache_pool,list_to_binary(SQL)),
 	case Row of
 		[] ->

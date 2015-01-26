@@ -214,7 +214,7 @@ handle_call( {add_unrepaired_warning, DevMoid, DevType, DomainMoid, WarningCode,
             case warning_handler:add_unrepaired_warning(Pool#pool.pool_id, DevMoid, DevType, 
                         DomainMoid, WarningCode, Level, Description, StartTime) of
                 [] ->
-                    lager:notice("[nms_mysql_task] ###### have got no warning code information ######~n", []),
+                    lager:warning("[nms_mysql_task] ###### have got no warning code information ######~n", []),
                     {reply, [], State#state{status=on}};
                 Value ->
                     {reply, Value, State#state{status=on}}
@@ -231,7 +231,7 @@ handle_call( {get_warning_code_detail, WarningCode}, _From, #state{pool_info=Poo
         ok ->
             case warning_handler:get_warning_code_detail(Pool#pool.pool_id, WarningCode) of
                 [] ->
-                    lager:notice("[nms_mysql_task] ###### have got no warning code information ######~n", []),
+                    lager:warning("[nms_mysql_task] ###### have got no warning code information ######~n", []),
                     {reply, [], State#state{status=on}};
                 Value ->
                     {reply, Value, State#state{status=on}}

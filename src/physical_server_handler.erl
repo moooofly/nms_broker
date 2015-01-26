@@ -4,8 +4,17 @@
          del_physical_server/3,
 
          add_collectorid/2,                       %% add
-         add_collector_dev_map/4,                 %% add
-         del_collector_dev_map/4,                 %% add
+         del_collectorid/2,                       %% add
+
+         set_heartbeat_timer_by_collectorid/3,    %% add
+         get_heartbeat_timer_by_collectorid/2,    %% add
+         del_heartbeat_timer_by_collectorid/2,    %% add
+
+         add_collector_online_device/4,           %% add
+         del_collector_online_device/4,           %% add
+         del_collector_online_device_all/2,       %% add
+
+         add_physical_ip/3,                       %% add
 
          update_physical_server_cpu_resource/3,   %% add 
          update_physical_server_disk_resource/3,  %% add
@@ -88,19 +97,58 @@ add_collectorid( RedisClient, CollectorID ) ->
 	Key = "collector",
 	eredis:q(RedisClient,["SADD",Key,CollectorID]).
 
-%% 添加 collector 和其负责管理设备的映射关系(散列类型数据)
+-spec del_collectorid(pid(),string()) -> {ok,binary()}.
+del_collectorid( RedisClient, CollectorID ) ->
+	Key = "collector",
+	eredis:q(RedisClient,["SREM",Key,CollectorID]).
+
+%% 保存 collector 所使用的 heartbeat 定时器
 %% 返回值 : {ok,<<"1">>} 
--spec add_collector_dev_map(pid(),string(),string(),string()) -> {ok,binary()}.
-add_collector_dev_map( RedisClient, CollectorID, DevGuid, DevType ) ->
-	Key = format_key_collector( CollectorID ),
+-spec set_heartbeat_timer_by_collectorid(pid(),string(),string()) -> {ok,binary()}.
+set_heartbeat_timer_by_collectorid( RedisClient, CollectorID, TimerRef ) ->
+	Key = format_key_collector_timer( CollectorID ),
+	eredis:q(RedisClient,["HSET",Key,"heartbeat",TimerRef]).
+
+%% 获取 collector 所使用的 heartbeat 定时器
+%% 返回值 : {ok,<<"Value">>} 
+-spec get_heartbeat_timer_by_collectorid(pid(),string()) -> {ok,binary()}.
+get_heartbeat_timer_by_collectorid( RedisClient, CollectorID ) ->
+	Key = format_key_collector_timer( CollectorID ),
+	eredis:q(RedisClient,["HGET",Key,"heartbeat"]).
+
+%% 删除 collector 所使用的 heartbeat 定时器
+%% 返回值 : {ok,<<"1">>} 
+-spec del_heartbeat_timer_by_collectorid(pid(),string()) -> {ok,binary()}.
+del_heartbeat_timer_by_collectorid( RedisClient, CollectorID ) ->
+	Key = format_key_collector_timer( CollectorID ),
+	eredis:q(RedisClient,["DEL",Key]).
+
+%% 添加一个 collector 下属设备的在线信息(散列类型数据)
+%% 返回值 : {ok,<<"1">>} 
+-spec add_collector_online_device(pid(),string(),string(),string()) -> {ok,binary()}.
+add_collector_online_device( RedisClient, CollectorID, DevGuid, DevType ) ->
+	Key = format_key_collector_online( CollectorID ),
 	eredis:q(RedisClient,["SADD",Key,DevType++":"++DevGuid]).
 
-%% 删除 collector 和其负责管理设备的映射关系(散列类型数据)
+%% 删除一个 collector 下属设备的在线信息(散列类型数据)
 %% 返回值 : 成功 {ok,<<"1">>} 失败 {ok,<<"0">>}
--spec del_collector_dev_map(pid(),string(),string(),string()) -> {ok,binary()}.
-del_collector_dev_map( RedisClient, CollectorID, DevGuid, DevType ) ->
-	Key = format_key_collector( CollectorID ),
+-spec del_collector_online_device(pid(),string(),string(),string()) -> {ok,binary()}.
+del_collector_online_device( RedisClient, CollectorID, DevGuid, DevType ) ->
+	Key = format_key_collector_online( CollectorID ),
 	eredis:q(RedisClient,["SREM",Key,DevType++":"++DevGuid]).
+
+%% 删除全部 collector 下属设备的在线信息(散列类型数据)
+%% 返回值 : 成功 {ok,<<"1">>} 
+-spec del_collector_online_device_all(pid(),string()) -> {ok,binary()}.
+del_collector_online_device_all( RedisClient, CollectorID ) ->
+	Key = format_key_collector_online( CollectorID ),
+	eredis:q(RedisClient,["DEL",Key]).
+
+%% 添加物理服务器的 IP 地址信息(散列类型数据)
+%% 返回值 : {ok,<<"1">>} 
+add_physical_ip(RedisClient,DevMoid,PhySerIPString) ->
+	Key = format_key_guid_info( DevMoid ),
+	eredis:q(RedisClient,["HSET",Key,"ip",PhySerIPString]).
 
 %% 更新物理服务器的 CPU 资源使用情况(散列类型数据)
 %% 返回值 : {ok,<<"OK">>} 
@@ -274,26 +322,30 @@ get_all_logic_server( RedisClient, DevMoid ) ->
 	{ok,LogicServerList} = eredis:q( RedisClient, ["SMEMBERS",Key] ),
 	LogicServerList.
 
-format_key_collector(CollectorID) when is_list(CollectorID) ->"collector:" ++ CollectorID ++ ":online";
-format_key_collector(CollectorID) when is_binary(CollectorID) ->"collector:" ++ binary_to_list(CollectorID) ++ ":online".
+
+format_key_collector_timer(CollectorID) when is_list(CollectorID) -> "collector:" ++ CollectorID ++ ":timer";
+format_key_collector_timer(CollectorID) when is_binary(CollectorID) -> "collector:" ++ binary_to_list(CollectorID) ++ ":timer".
+
+format_key_collector_online(CollectorID) when is_list(CollectorID) -> "collector:" ++ CollectorID ++ ":online";
+format_key_collector_online(CollectorID) when is_binary(CollectorID) -> "collector:" ++ binary_to_list(CollectorID) ++ ":online".
 	
-format_key_server(DomainMoid) when is_list(DomainMoid) ->"domain:" ++ DomainMoid ++ ":server";
-format_key_server(DomainMoid) when is_binary(DomainMoid) ->"domain:" ++ binary_to_list(DomainMoid) ++ ":server".
+format_key_server(DomainMoid) when is_list(DomainMoid) -> "domain:" ++ DomainMoid ++ ":server";
+format_key_server(DomainMoid) when is_binary(DomainMoid) -> "domain:" ++ binary_to_list(DomainMoid) ++ ":server".
 
-format_key_moid_info(DevMoid) when is_list(DevMoid) ->"p_server:" ++ DevMoid ++ ":info";
-format_key_moid_info(DevMoid) when is_binary(DevMoid) ->"p_server:" ++ binary_to_list(DevMoid) ++ ":info".
+format_key_moid_info(DevMoid) when is_list(DevMoid) -> "p_server:" ++ DevMoid ++ ":info";
+format_key_moid_info(DevMoid) when is_binary(DevMoid) -> "p_server:" ++ binary_to_list(DevMoid) ++ ":info".
 
-format_key_guid_info(DevGuid) when is_list(DevGuid) ->"p_server:" ++ DevGuid ++ ":info";
-format_key_guid_info(DevGuid) when is_binary(DevGuid) ->"p_server:" ++ binary_to_list(DevGuid) ++ ":info".
+format_key_guid_info(DevGuid) when is_list(DevGuid) -> "p_server:" ++ DevGuid ++ ":info";
+format_key_guid_info(DevGuid) when is_binary(DevGuid) -> "p_server:" ++ binary_to_list(DevGuid) ++ ":info".
 
-format_key_resource(DevMoid) when is_list(DevMoid) ->"p_server:" ++ DevMoid ++ ":resource";
-format_key_resource(DevMoid) when is_binary(DevMoid) ->"p_server:" ++ binary_to_list(DevMoid) ++ ":resource".
+format_key_resource(DevMoid) when is_list(DevMoid) -> "p_server:" ++ DevMoid ++ ":resource";
+format_key_resource(DevMoid) when is_binary(DevMoid) -> "p_server:" ++ binary_to_list(DevMoid) ++ ":resource".
 
-format_key_warning(DevMoid) when is_list(DevMoid) ->"p_server:" ++ DevMoid ++ ":warning";
-format_key_warning(DevMoid) when is_binary(DevMoid) ->"p_server:" ++ binary_to_list(DevMoid) ++ ":warning".
+format_key_warning(DevMoid) when is_list(DevMoid) -> "p_server:" ++ DevMoid ++ ":warning";
+format_key_warning(DevMoid) when is_binary(DevMoid) -> "p_server:" ++ binary_to_list(DevMoid) ++ ":warning".
 
-format_key_online(DevMoid) when is_list(DevMoid) ->"p_server:" ++ DevMoid ++ ":online";
-format_key_online(DevMoid) when is_binary(DevMoid) ->"p_server:" ++ binary_to_list(DevMoid) ++ ":online".
+format_key_online(DevMoid) when is_list(DevMoid) -> "p_server:" ++ DevMoid ++ ":online";
+format_key_online(DevMoid) when is_binary(DevMoid) -> "p_server:" ++ binary_to_list(DevMoid) ++ ":online".
 
-format_key_logic_server(DevMoid) when is_list(DevMoid) ->"p_server:" ++ DevMoid ++ ":l_server";
-format_key_logic_server(DevMoid) when is_binary(DevMoid) ->"p_server:" ++ binary_to_list(DevMoid) ++ ":l_server".
+format_key_logic_server(DevMoid) when is_list(DevMoid) -> "p_server:" ++ DevMoid ++ ":l_server";
+format_key_logic_server(DevMoid) when is_binary(DevMoid) -> "p_server:" ++ binary_to_list(DevMoid) ++ ":l_server".

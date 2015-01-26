@@ -43,6 +43,8 @@
 -define(IN_P2P_CONF,      2).   %% 在点对点会议中
 -define(NOT_IN_CONF,      3).   %% 不在会议中
 
+-define(COLLECTOR_TIMEOUT, 30 * 1000). %% collector 心跳保活时间
+
 
 %%--------------------------------------------------------------------------
 %% API
@@ -212,8 +214,6 @@ devtype_distinguish(Devtype) ->
                     %% 物理服务器
                     <<"SERVICE_SRV_PHY">>           -> {physical};
 
-                    %% 专用于 EV_DEV_OFFLINE 消息的特殊处理
-                    <<"UNKNOWN">>                   -> {collector, offline};
                     %% 专用于 EV_COLLECTOR_HEARTBEAT 消息的特殊处理
                     <<"COLLECTOR">>                 -> {collector, heartbeat};
 
@@ -229,7 +229,7 @@ to_description(Code) when is_integer(Code) ->
         1002 -> "Terminal online/offline";
         1003 -> "Terminal Packet Lost overhead 5%";
         1004 -> "Terminal Packet Lost overhead 10%";
-        1005 -> "Terminal Video Source Lost";
+        1005 -> "Terminal 1st Video Source Lost";
         1006 -> "Terminal Register GK Failure";
         1007 -> "Terminal Version too Old";
         1008 -> "Terminal Reboot Abnormally";
@@ -239,6 +239,15 @@ to_description(Code) when is_integer(Code) ->
         1016 -> "Terminal CPUFan Fault";
         1017 -> "Terminal Temperature too High";
         1018 -> "Terminal Voltage too High";
+        1020 -> "Terminal 2nd Video Source Lost";
+        1021 -> "Terminal 3rd Video Source Lost";
+        1022 -> "Terminal 4th Video Source Lost";
+        1023 -> "Terminal 5th Video Source Lost";
+        1024 -> "Terminal 6th Video Source Lost";
+        1025 -> "Terminal 7th Video Source Lost";
+        1026 -> "Terminal 8th Video Source Lost";
+        1027 -> "Terminal 9th Video Source Lost";
+        1028 -> "Terminal 10th Video Source Lost";
 
         %% 服务器告警
         2001 -> "BMC Connection Failure";
@@ -276,6 +285,23 @@ to_description(Code) when is_integer(Code) ->
 to_description(_) ->
     lager:warning("[nms_task_control] Code must be of interger type!").
 
+channelid_to_warningcode(VideoSrcChannelID) ->
+    WarningCode = case VideoSrcChannelID of
+        0 -> 1005;  %% 终端侧上报消息中 0 代表通道 1
+        1 -> 1020;
+        2 -> 1021;
+        3 -> 1022;
+        4 -> 1023;
+        5 -> 1024;
+        6 -> 1025;
+        7 -> 1026;
+        8 -> 1027;
+        9 -> 1028;
+        _ -> throw(out_of_current_range)
+    end,
+    WarningCode.
+
+
 
 update_mysql_warning_info(WarningTriggered,MySQLTask,DevMoid,DomainMoid,DevType,StatisticTime,EventID,WarningCode) ->
 
@@ -293,12 +319,12 @@ update_mysql_warning_info(WarningTriggered,MySQLTask,DevMoid,DomainMoid,DevType,
     %%io:format("~n~s~n", [string:chars($-,36)]),
     %%io:format("warning code[~p] detail:~n", [WarningCode]),
     %%io:format("      Id:~p~n", [Id]),
-    %%io:format("      Type:~p~n", [Type]),  %% 中文
+    %%io:format("      Type:~ts~n", [Type]),  %% 中文
     %%io:format("      Code:~p~n", [Code]),
-    %%io:format("      Name:~p~n", [Name]),  %% 中文
+    %%io:format("      Name:~ts~n", [Name]),  %% 中文
     %%io:format("      Level:~p~n", [Level]),
-    %%io:format("      Description:~p~n", [Description]),  %% 中文
-    %%io:format("      Suggestion:~p~n", [Suggestion]),    %% 中文
+    %%io:format("      Description:~ts~n", [Description]),  %% 中文
+    %%io:format("      Suggestion:~ts~n", [Suggestion]),    %% 中文
     %%io:format("~n~s~n", [string:chars($-,36)]),
 
     %% 查看 warning_unrepaired 表中是否存在对应的告警条目
@@ -428,7 +454,8 @@ update_redis_warning_info(WarningTriggered,RedisTask,DevMoid,DevType,WarningCode
                     Tag = 'terminal',
                     Handler = add_terminal_warning
             end,
-            Action = 'SADD';
+            Action = 'SADD',
+            Desc   = 'ALREADY';
             
         false -> %% 未触发告警
             case DevType of
@@ -442,13 +469,14 @@ update_redis_warning_info(WarningTriggered,RedisTask,DevMoid,DevType,WarningCode
                     Tag = 'terminal',
                     Handler = del_terminal_warning
             end,
-            Action = 'SREM'
+            Action = 'SREM',
+            Desc   = 'NOT'
     end,
 
     case gen_server:call(RedisTask, {Handler, DevMoid, WarningCode}, infinity) of
         {ok, <<"0">>} ->
             lager:info("[nms_task_control] '~p ~p:~p:warning ~p' -- Success! 
-                but WarningCode.~p ALREADY exist!~n", [Action, Tag, DevMoid, WarningCode, WarningCode]);
+                but WarningCode.~p ~p exist!~n", [Action,Tag,DevMoid,WarningCode,WarningCode,Desc]);
         {ok, _} ->
             lager:info("[nms_task_control] '~p ~p:~p:warning ~p' -- Success!~n", 
                 [Action, Tag, DevMoid, WarningCode]);  
@@ -458,6 +486,178 @@ update_redis_warning_info(WarningTriggered,RedisTask,DevMoid,DevType,WarningCode
     end,
 
     io:format("", []).
+
+
+sadd_chan_index(RedisTask, DevMoid, privideo_send_chan, PriVideoSendChanList) ->
+    lager:info("[nms_task_control] PriVideoSend Channel = ~p~n", [PriVideoSendChanList]),
+    case gen_server:call(RedisTask, 
+            {add_terminal_meeting_channel, DevMoid, privideo_send_chan, PriVideoSendChanList}, infinity) of
+        {error, ChanErr} ->
+            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:privideo_send_chan' -- Failed! Error '~p'~n", 
+                [DevMoid, ChanErr]);
+        _ ->
+            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:privideo_send_chan' -- Success!~n", 
+                [DevMoid])
+    end;
+
+sadd_chan_index(RedisTask, DevMoid, privideo_recv_chan, PriVideoRecvChanList) ->
+    lager:info("[nms_task_control] PriVideoRecv Channel = ~p~n", [PriVideoRecvChanList]),
+    case gen_server:call(RedisTask, 
+            {add_terminal_meeting_channel, DevMoid, privideo_recv_chan, PriVideoRecvChanList}, infinity) of
+        {error, ChanErr} ->
+            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:privideo_recv_chan' -- Failed! Error '~p'~n", 
+                [DevMoid, ChanErr]);
+        _ ->
+            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:privideo_recv_chan' -- Success!~n", 
+                [DevMoid])
+    end;
+
+sadd_chan_index(RedisTask, DevMoid, assvideo_send_chan, AssVideoSendChanList) ->
+    lager:info("[nms_task_control] AssVideoSend Channel = ~p~n", [AssVideoSendChanList]),
+    case gen_server:call(RedisTask, 
+            {add_terminal_meeting_channel, DevMoid, assvideo_send_chan, AssVideoSendChanList}, infinity) of
+        {error, ChanErr} ->
+            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:assvideo_send_chan' -- Failed! Error '~p'~n", 
+                [DevMoid, ChanErr]);
+        _ ->
+            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:assvideo_send_chan' -- Success!~n", 
+                [DevMoid])
+    end;
+
+sadd_chan_index(RedisTask, DevMoid, assvideo_recv_chan, AssVideoRecvChanList) ->
+    lager:info("[nms_task_control] AssVideoRecv Channel = ~p~n", [AssVideoRecvChanList]),
+    case gen_server:call(RedisTask, 
+            {add_terminal_meeting_channel, DevMoid, assvideo_recv_chan, AssVideoRecvChanList}, infinity) of
+        {error, ChanErr} ->
+            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:assvideo_recv_chan' -- Failed! Error '~p'~n", 
+                [DevMoid, ChanErr]);
+        _ ->
+            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:assvideo_recv_chan' -- Success!~n", 
+                [DevMoid])
+    end;
+
+sadd_chan_index(RedisTask, DevMoid, audio_send_chan, AudioSendChanList) ->
+    lager:info("[nms_task_control] AudioSend Channel = ~p~n", [AudioSendChanList]),
+    case gen_server:call(RedisTask, 
+            {add_terminal_meeting_channel, DevMoid, audio_send_chan, AudioSendChanList}, infinity) of
+        {error, ChanErr} ->
+            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:audio_send_chan' -- Failed! Error '~p'~n", 
+                [DevMoid, ChanErr]);
+        _ ->
+            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:audio_send_chan' -- Success!~n", 
+                [DevMoid])
+    end;
+
+sadd_chan_index(RedisTask, DevMoid, audio_recv_chan, AudioRecvChanList) ->
+    lager:info("[nms_task_control] AudioRecv Channel = ~p~n", [AudioRecvChanList]),
+    case gen_server:call(RedisTask, 
+            {add_terminal_meeting_channel, DevMoid, audio_recv_chan, AudioRecvChanList}, infinity) of
+        {error, ChanErr} ->
+            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:audio_recv_chan' -- Failed! Error '~p'~n", 
+                [DevMoid, ChanErr]);
+        _ ->
+            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:audio_recv_chan' -- Success!~n", 
+                [DevMoid])
+    end.
+
+audio_format_trans(Format) when is_integer(Format) ->
+    case Format of
+        0 -> "emAG711a";
+        1 -> "emAG711u";
+        2 -> "emAG722";
+        3 -> "emAG7231";
+        4 -> "emAG728";
+        5 -> "emAG729";
+        6 -> "emAMP3";
+        7 -> "emAG721";
+        8 -> "emAG7221";
+        9 -> "emAG719";
+        10 -> "emAMpegAACLC";
+        11 -> "emAMpegAACLD";
+        12 -> "emAOpus";
+        _ -> throw(out_of_audio_format_range)
+    end;
+audio_format_trans(_) ->
+    lager:error("[nms_task_control] audio Format is not integer type!"),
+    throw(format_is_wrong_type).
+
+video_format_trans(Format) when is_integer(Format) ->
+    case Format of
+        0 -> "emVH261";
+        1 -> "emVH262";
+        2 -> "emVH263";
+        3 -> "emVH263plus";
+        4 -> "emVH264";
+        5 -> "emVMPEG4";
+        6 -> "emVH265";
+        _ -> throw(out_of_video_format_range)
+    end;
+video_format_trans(_) ->
+    lager:error("[nms_task_control] video Format is not integer type!"),
+    throw(format_is_wrong_type).
+
+
+cancel_timer(Ref) ->
+    case erlang:cancel_timer(Ref) of
+    false ->
+        receive
+            {timeout, Ref, _} -> 0
+        after 0 -> false
+        end;
+    RemainingTime ->
+        RemainingTime
+    end.
+
+update_timer_by_collectorid(RedisTask, CollectorID) ->
+
+    %% 根据 collectorid 从 Redis 表 collector:collectorid:timer 中获取之前使用的定时器 TimerRef
+    case gen_server:call(RedisTask, {get_heartbeat_timer_by_collectorid, CollectorID}, infinity) of
+        {error, CollectorHBErr1} ->
+            lager:warning("[nms_task_control] 'HGET collector:~p:timer heartbeat' -- Failed! Error '~p'~n", 
+                [CollectorID, CollectorHBErr1]),
+            OldTimerRef_ = undefined;
+        {ok, undefined} ->
+            lager:info("[nms_task_control] 'HGET collector:~p:timer heartbeat' -- Success! HBTimerRef=undefined~n", 
+                [CollectorID]),
+            OldTimerRef_ = undefined;
+        {ok, OldTimerRef_} ->
+            lager:info("[nms_task_control] 'HGET collector:~p:timer heartbeat' -- Success! HBTimerRef=~p~n", 
+                [CollectorID, binary_to_term(OldTimerRef_)])
+    end,
+
+    case OldTimerRef_ of
+        undefined ->
+            void;
+        _ ->
+            OldTimerRef = binary_to_term(OldTimerRef_),
+            %% 删除之前的定时器
+            case cancel_timer(OldTimerRef) of
+                false ->  %% 对应定时器已被删除的情况
+                    lager:notice("[nms_task_control] Trying to cancel a non-exist timer! ~p~n", [OldTimerRef]);
+                0     ->  %% 对应定时器已超时情况
+                    lager:notice("[nms_task_control] Timer is ALREADY Triggered! ~p~n", [OldTimerRef]);
+                    %% 从 redis 表中删除 collector 相关信息
+                _     ->  %% 对应定时器未超时情况
+                    lager:notice("[nms_task_control] Timer is STILL Active! ~p~n", [OldTimerRef])                            
+            end
+    end,
+
+    %% 设置新的定时器
+    NewTimerRef = erlang:start_timer(?COLLECTOR_TIMEOUT, self(), {delete_collector_info, CollectorID}),
+    NewTimerRefList = binary_to_list(term_to_binary(NewTimerRef)), 
+
+    %% 更新 collectorid 与 TimerRef 的映射
+    %% 根据 collectorid 向 Redis 表 collector:collectorid:timer 中保存新的定时器 TimerRef
+    case gen_server:call(RedisTask, {set_heartbeat_timer_by_collectorid, CollectorID, NewTimerRefList}, infinity) of
+        {error, CollectorHBErr2} ->
+            lager:warning("[nms_task_control] 'HSET collector:~p:timer heartbeat' -- Failed! Error '~p'~n", 
+                [CollectorID, CollectorHBErr2]);
+        {ok, _} ->
+            lager:info("[nms_task_control] 'HSET collector:~p:timer heartbeat ~p' -- Success! ~n", 
+                [CollectorID, NewTimerRef])
+    end.
+
+
 
 physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
@@ -483,13 +683,13 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
     EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
     lager:info("  -->  EventID = ~p~n", [EventID]),
 
-    %% 通过 "devid" 在 redis 中查询当前物理设备所属的域 ID
+    %% 通过 "devid" 在 redis 表 p_server:devid:info 中查询当前物理设备相关信息
     case gen_server:call(RedisTask, {get_physical_server_info_by_guid, DevGuid_}, infinity) of
         { ok, {DevMoid_, DevGuid_, DomainMoid_, DevName, Location, IP} } ->
             lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
             lager:info("  -->  DomainMoid = ~p~n", [DomainMoid_]),
             lager:info("  -->  DevName = ~p~n", [DevName]),
-            lager:info("  -->  Location = ~p~n", [Location]),
+            lager:info("  -->  Location = ~ts~n", [Location]),
             lager:info("  -->  IP = ~p~n", [IP]),
 
             DevMoid = binary_to_list(DevMoid_),
@@ -500,20 +700,84 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
             %% 通过 "eventid" 判定为信息类型
             case EventID of
+                <<"EV_SERVER_INFO">>   ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"111">>},
+                    %%       {"devtype",<<"Server">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"serverinfo",
+                    %%           [{obj,[{"ip",<<"172.16.100.1">>}]},
+                    %%            {obj,[{"ip",<<"172.16.110.1">>}]}]},
+                    %%       {"eventid",<<"EV_SERVER_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_SERVER_INFO' event!~n", []),
+
+                    ServerInfo = rfc4627:get_field(JsonObj, "serverinfo", undefined),
+
+                    PhySerIPList = [ erlang:binary_to_list(NetCardIP) || {obj, [{_, NetCardIP}]} <- ServerInfo],
+                    PhySerIPString = lists:concat(lists:map(fun(E) -> E ++ ";" end, PhySerIPList)),
+
+                    lager:info("  -->  IPs = ~p~n", [PhySerIPString]),
+
+                    %% 向 redis 表 p_server:devid:info 中插入上面得到的 IP 地址字符串
+                    case gen_server:call(RedisTask, {add_physical_ip, DevMoid, PhySerIPString}, infinity) of
+                        {error, PhySrvInfoErr0} ->
+                            lager:warning("[nms_task_control] 'HSET p_server:~p:info ip xx' -- Failed! Error '~p'~n", 
+                                [DevMoid, PhySrvInfoErr0]);
+                        _ ->
+                            lager:info("[nms_task_control] 'HSET p_server:~p:info ip ~p' -- Success!~n", 
+                                [DevMoid, PhySerIPString])
+                    end,
+                    io:format("", []);
+
                 <<"EV_SYSTIME_SYNC">>   ->
-                    lager:info("[nms_task_control] get 'EV_SYSTIME_SYNC' event, do nothing!~n", []);
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"111">>},
+                    %%       {"devtype",<<"Server">>},
+                    %%       {"rpttime",<<"2014/11/20:20:13:55">>},
+                    %%       {"eventid",<<"EV_SYSTIME_SYNC">>},
+                    %%       {"syncstate",1}]}
+
+                    lager:info("[nms_task_control] get 'EV_SYSTIME_SYNC' event!~n", []),
+
+                    Sync_ = rfc4627:get_field(JsonObj, "syncstate", undefined),
+                    lager:info("  -->  Sync = ~p~n", [Sync_]),
+
+                    PhySyncWarningTriggered = case Sync_ of
+                        0 -> %% NTP异常
+                            true;
+                        1 ->
+                            false;
+                        _ ->
+                            throw(physical_ntp_sync_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PhySyncWarningTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?P_SERVER,StatisticTime,EventID,2004), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PhySyncWarningTriggered,RedisTask,DevMoid,?P_SERVER,2004), 
+
+        %% ------------------------------------------------------------
+                    io:format("", []);
+
                 <<"EV_DEV_ONLINE">>     ->
                     %% 消息举例
                     %% {obj,[{"eventid",<<"EV_DEV_ONLINE">>},
                     %%       {"devid",<<"111">>},
                     %%       {"devtype",<<"SERVICE_SRV_PHY">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
-                    %% 
+
                     lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
+
+                    update_timer_by_collectorid(RedisTask, CollectorID),
                     
                     %%  设置 Redis 表 p_server:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_physical_server_online, DevMoid}, infinity) of
@@ -534,7 +798,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     end,
 
                     %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
-                    case gen_server:call(RedisTask, {add_collector_dev_map, CollectorID, DevGuid, DevType}, infinity) of
+                    case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
                         {error, PhyDevOnlineErr2} ->
                             lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, PhyDevOnlineErr2]);
@@ -542,20 +806,22 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                             lager:info("[nms_task_control] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevGuid])
                     end,
-
                     io:format("", []);
+
                 <<"EV_DEV_OFFLINE">>     ->
                     %% 消息举例
                     %% {obj,[{"eventid",<<"EV_DEV_OFFLINE">>},
                     %%       {"devid",<<"111">>},
                     %%       {"devtype",<<"SERVICE_SRV_PHY">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
-                    %% 
+
                     lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
+
+                    update_timer_by_collectorid(RedisTask, CollectorID),
                     
                     %%  删除 Redis 表 p_server:devid:online
                     case gen_server:call(RedisTask, {del_physical_server_online, DevMoid}, infinity) of
@@ -585,7 +851,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     end,
 
                     %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
-                    case gen_server:call(RedisTask, {del_collector_dev_map, CollectorID, DevGuid, DevType}, infinity) of
+                    case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
                         {error, PhyDevOnlineErr3} ->
                             lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, PhyDevOnlineErr3]);
@@ -593,8 +859,8 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                             lager:info("[nms_task_control] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevGuid])
                     end,
-
                     io:format("", []);
+
                 <<"EV_PFMINFO_CPU">>     ->
                     %% 消息举例
                     %% {obj,[{"devid",<<"1.1.1">>},
@@ -684,7 +950,6 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                             lager:info("[nms_task_control] 'HMSET p_server:~p:resource cpu ~p' -- Success!~n", 
                                 [DevMoid, CpuAverage])
                     end,
-
                     io:format("", []);
 
                 <<"EV_PFMINFO_MEM">>     ->
@@ -758,7 +1023,6 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                             lager:info("[nms_task_control] 'HMSET p_server:~p:resource memory ~p' -- Success!", 
                                 [DevMoid, MemUsePct])
                     end,
-
                     io:format("", []);
 
                 <<"EV_PFMINFO_DISK">>    ->
@@ -831,7 +1095,6 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                             lager:info("[nms_task_control] 'HMSET p_server:~p:resource disk ~p' -- Success!", 
                                 [DevMoid, DiskUsePct])
                     end,
-
                     io:format("", []);
 
                 <<"EV_PFMINFO_NETCARD">> ->
@@ -934,9 +1197,9 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %% 判定当前多 NetCard 网卡设备上单 NetCard 接收丢包率是否触发告警状态
                     PacketLostPctList = [ PacketLostPct || {obj,[{_,{obj,[{"recvpktloserate",PacketLostPct},_,_]}}]} <- Netcards],
 
-            %% 判定否超过 5% 和 10% -- 分别对应告警码 2013 和 2014
-            Fun10 = fun(V10) -> V10 >= 10 end,                    
-            Pct10 = lists:any(Fun10, PacketLostPctList),
+                    %% 判定否超过 5% 和 10% -- 分别对应告警码 2013 和 2014
+                    Fun10 = fun(V10) -> V10 >= 10 end,                    
+                    Pct10 = lists:any(Fun10, PacketLostPctList),
 
         %% ------------------------------------------------------------
                     %% 未处理失败
@@ -1029,6 +1292,8 @@ logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
+
+                    update_timer_by_collectorid(RedisTask, CollectorID),
                     
                     %%  设置 Redis 表 l_server:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_logic_server_online, DevMoid}, infinity) of
@@ -1049,7 +1314,7 @@ logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
                     end,
 
                     %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
-                    case gen_server:call(RedisTask, {add_collector_dev_map, CollectorID, DevGuid, DevType}, infinity) of
+                    case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
                         {error, LogDevOnlineErr2} ->
                             lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, LogDevOnlineErr2]);
@@ -1071,6 +1336,8 @@ logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
+
+                    update_timer_by_collectorid(RedisTask, CollectorID),
                     
                     %%  删除 Redis 表 l_server:devid:online
                     case gen_server:call(RedisTask, {del_logic_server_online, DevMoid}, infinity) of
@@ -1100,7 +1367,7 @@ logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
                     end,
 
                     %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
-                    case gen_server:call(RedisTask, {del_collector_dev_map, CollectorID, DevGuid, DevType}, infinity) of
+                    case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
                         {error, LogDevOfflineErr3} ->
                             lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, LogDevOfflineErr3]);
@@ -1174,6 +1441,8 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
+
+                    update_timer_by_collectorid(RedisTask, CollectorID),
                     
                     %%  设置 Redis 表 terminal:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_terminal_online, DevMoid}, infinity) of
@@ -1194,7 +1463,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     end,
 
                     %% 向 Redis 表 collector:collectorid:online 中写入 devtype:devid 信息
-                    case gen_server:call(RedisTask, {add_collector_dev_map, CollectorID, DevMoid, DevType}, infinity) of
+                    case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, TerDevOnlineErr2} ->
                             lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, TerDevOnlineErr2]);
@@ -1202,8 +1471,8 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                             lager:info("[nms_task_control] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevMoid])
                     end,
-
                     io:format("", []);
+
                 <<"EV_DEV_OFFLINE">>     ->
                     %% 消息举例
                     %% {obj,[{"eventid",<<"EV_DEV_OFFLINE">>},
@@ -1216,6 +1485,8 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
+
+                    update_timer_by_collectorid(RedisTask, CollectorID),
                     
                     %%  删除 Redis 表 terminal:devid:online
                     case gen_server:call(RedisTask, {del_terminal_online, DevMoid}, infinity) of
@@ -1263,7 +1534,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     end,
 
                     %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
-                    case gen_server:call(RedisTask, {del_collector_dev_map, CollectorID, DevMoid, DevType}, infinity) of
+                    case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, TerDevOfflineErr5} ->
                             lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, TerDevOfflineErr5]);
@@ -1271,29 +1542,60 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                             lager:info("[nms_task_control] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevMoid])
                     end,
-
                     io:format("", []);
+
                 <<"EV_MT_INFO">>     ->
                     %% 消息举例
                     %% {obj,[{"devid",<<"1.2.2">>},
-                    %%       {"devtype",<<"SERVICE_TS_MT_TRUELINK">>},
+                    %%       {"devtype",<<"Skywalker for Windows">>},
                     %%       {"mt_info",
-                    %%           {obj,[{"cpu_freq",5},
+                    %%           {obj,[{"aps_addr",
+                    %%                     {obj,[{"domain",<<"172.16.72.84">>},
+                    %%                           {"ip",<<"218.22.22.23">>}]}},
+                    %%                 {"cpu_type",<<"i7">>},
+                    %%                 {"cpu_freq",5},
                     %%                 {"devname",<<"longweitest">>},
+                    %%                 {"cpu_num",4},
                     %%                 {"devver",<<"20141215">>},
                     %%                 {"oem",<<"dddd">>},
-                    %%                 {"cpu_type",<<"i7">>},
-                    %%                 {"devip",<<"172.16.72.84">>},
                     %%                 {"memory",4000},
+                    %%                 {"netinfo",
+                    %%                     {obj,[{"dns",<<"172.16.0.65">>},
+                    %%                           {"nat_ip",<<"172.16.72.84">>},
+                    %%                           {"ip",<<"172.16.72.84">>}]}},
                     %%                 {"os",<<"XP">>}]}},
                     %%       {"eventid",<<"EV_MT_INFO">>}]}
                     lager:info("[nms_task_control] get 'EV_MT_INFO' event!~n", []),
 
                     MtInfo = rfc4627:get_field(JsonObj, "mt_info", undefined),
 
-                    DevIP_ = rfc4627:get_field(MtInfo, "devip", undefined),
-                    lager:info("  -->  DevIP = ~p~n", [DevIP_]),
-                    DevIP = binary_to_list(DevIP_),
+                    APSAddr = rfc4627:get_field(MtInfo, "aps_addr", undefined),
+
+                    APSDomainName_ = rfc4627:get_field(APSAddr, "domain", undefined),
+                    lager:info("  -->  APSDomainName = ~p~n", [APSDomainName_]),
+                    APSDomainName = binary_to_list(APSDomainName_),
+
+                    APSIp_ = rfc4627:get_field(APSAddr, "ip", undefined),
+                    lager:info("  -->  APSIp = ~p~n", [APSIp_]),
+                    APSIp = binary_to_list(APSIp_),
+
+                    NetInfo = rfc4627:get_field(MtInfo, "netinfo", undefined),
+
+                    TerDns_ = rfc4627:get_field(NetInfo, "dns", undefined),
+                    lager:info("  -->  TerDns = ~p~n", [TerDns_]),
+                    TerDns = binary_to_list(TerDns_),
+
+                    TerNatIp_ = rfc4627:get_field(NetInfo, "nat_ip", undefined),
+                    lager:info("  -->  TerNatIp = ~p~n", [TerNatIp_]),
+                    TerNatIp = binary_to_list(TerNatIp_),
+
+                    TerIp_ = rfc4627:get_field(NetInfo, "ip", undefined),
+                    lager:info("  -->  TerIp = ~p~n", [TerIp_]),
+                    TerIp = binary_to_list(TerIp_),
+
+                    TerCpuNum_ = rfc4627:get_field(MtInfo, "cpu_num", undefined),
+                    lager:info("  -->  TerCpuNum = ~p~n", [TerCpuNum_]),
+                    TerCpuNum = integer_to_list(TerCpuNum_), 
 
                     %% 这里需要再确认，因为 baseinfo 里已经有 name 字段
                     %% 周结论：设备名仅在 baseinfo 中存在，且为事先导入的，其余消息中设备名都不需要
@@ -1327,16 +1629,110 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     MemoryGBList = erlang:float_to_list(MemoryGB, [{decimals, 2}])++"GB",
 
                     %% 向 Redis 的 terminal:devid:runninginfo 表中保存终端 运行时信息
-                    case gen_server:call(RedisTask, {add_terminal_running_info, DevMoid, atom_to_list(Type) , DevIP, DevVer, 
-                            OS, CpuType, CpuFreq, MemoryGBList}, infinity) of
+                    case gen_server:call(RedisTask, {add_terminal_running_info, DevMoid, atom_to_list(Type), DevVer, 
+                            OS, CpuType, CpuFreq, TerCpuNum, MemoryGBList}, infinity) of
                         {error, TerDevInfoErr0} ->
                             lager:warning("[nms_task_control] 'HMSET terminal:~p:runninginfo' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevInfoErr0]);
                         {ok, _} ->
                             lager:info("[nms_task_control] 'HMSET terminal:~p:runninginfo' -- Success!~n", [DevMoid])
                     end,
+
+                    %% 向 Redis 的 terminal:devid:netinfo 表中保存终端 APS 和网络相关信息
+                    case gen_server:call(RedisTask, {add_terminal_aps_and_net_info, DevMoid, TerIp, TerNatIp, TerDns, 
+                            APSDomainName, APSIp}, infinity) of
+                        {error, TerDevInfoErr1} ->
+                            lager:warning("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevInfoErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
+                    end,
+
                     io:format("", []);
-                    
+
+                <<"EV_NETINFO_MSG">>   ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1.2.2">>},
+                    %%       {"devtype",<<"Skywalker for Windows">>},
+                    %%       {"netinfo",
+                    %%           {obj,[{"dns",<<"172.16.0.65">>},
+                    %%                 {"nat_ip",<<"172.16.72.84">>},
+                    %%                 {"ip",<<"172.16.72.84">>}]}},
+                    %%       {"eventid",<<"EV_NETINFO_MSG">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_NETINFO_MSG' event!~n", []),
+
+                    NetInfo = rfc4627:get_field(JsonObj, "netinfo", undefined),
+
+                    TerDns_ = rfc4627:get_field(NetInfo, "dns", undefined),
+                    lager:info("  -->  TerDns = ~p~n", [TerDns_]),
+                    TerDns = binary_to_list(TerDns_),
+
+                    TerNatIp_ = rfc4627:get_field(NetInfo, "nat_ip", undefined),
+                    lager:info("  -->  TerNatIp = ~p~n", [TerNatIp_]),
+                    TerNatIp = binary_to_list(TerNatIp_),
+
+                    TerIp_ = rfc4627:get_field(NetInfo, "ip", undefined),
+                    lager:info("  -->  TerIp = ~p~n", [TerIp_]),
+                    TerIp = binary_to_list(TerIp_),
+
+                    %% 向 Redis 的 terminal:devid:netinfo 表中保存终端 网络相关信息
+                    case gen_server:call(RedisTask, {add_terminal_net_info, DevMoid, TerIp, TerNatIp, TerDns}, infinity) of
+                        {error, TerDevNetInfoErr0} ->
+                            lager:warning("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevNetInfoErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_BANDWIDTH_MSG">>   ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1.2.2">>},
+                    %%       {"devtype",<<"Skywalker for Windows">>},
+                    %%       {"recv_bandwidth",
+                    %%           {obj,[{"bandwidth",1024},
+                    %%                 {"drop_rate",10}]}},
+                    %%       {"send_bandwidth",
+                    %%           {obj,[{"bandwidth",512},
+                    %%                 {"drop_rate",3}]}},
+                    %%       {"eventid",<<"EV_BANDWIDTH_MSG">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_BANDWIDTH_MSG' event!~n", []),
+
+                    RBW = rfc4627:get_field(JsonObj, "recv_bandwidth", undefined),
+
+                    RecvBandWidth_ = rfc4627:get_field(RBW, "bandwidth", undefined),
+                    lager:info("  -->  RecvBandWidth = ~p~n", [RecvBandWidth_]),
+                    RecvBandWidth = integer_to_list(RecvBandWidth_), 
+
+                    RecvDropRate_ = rfc4627:get_field(RBW, "drop_rate", undefined),
+                    lager:info("  -->  RecvDropRate = ~p~n", [RecvDropRate_]),
+                    RecvDropRate = integer_to_list(RecvDropRate_),
+
+                    SBW = rfc4627:get_field(JsonObj, "send_bandwidth", undefined),
+
+                    SendBandWidth_ = rfc4627:get_field(SBW, "bandwidth", undefined),
+                    lager:info("  -->  SendBandWidth = ~p~n", [SendBandWidth_]),
+                    SendBandWidth = integer_to_list(SendBandWidth_), 
+
+                    SendDropRate_ = rfc4627:get_field(SBW, "drop_rate", undefined),
+                    lager:info("  -->  SendDropRate = ~p~n", [SendDropRate_]),
+                    SendDropRate = integer_to_list(SendDropRate_),
+
+                    %% 向 Redis 的 terminal:devid:netinfo 表中保存终端 带宽相关信息
+                    case gen_server:call(RedisTask, {add_terminal_bandwidth_info, 
+                            DevMoid, SendBandWidth, SendDropRate, RecvBandWidth, RecvDropRate}, infinity) of
+                        {error, TerDevBandwidthInfoErr0} ->
+                            lager:warning("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
+                                [DevMoid, TerDevBandwidthInfoErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
+                    end,
+
+                    io:format("", []);
+
                 <<"EV_VERSION_MSG">>     ->
                     %% 消息举例
                     %% {obj,[{"devid",<<"1.2.2">>},
@@ -1368,7 +1764,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                             lager:info("[nms_task_control] 'INSERT INTO terminal_version_statistic' -- Success!~n", []);
                         _ ->
                             lager:warning("[nms_task_control] 'INSERT INTO terminal_version_statistic' -- Failed!~n", [])
-                    end,
+                    end,                    
                     io:format("", []);
 
                 <<"EV_PFMINFO_MSG">>     ->
@@ -1476,7 +1872,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     DiscSrvTypeInfo_ = rfc4627:get_field(JsonObj, "conn_srv_type_info", undefined),
                     DiscSrvTypeInfo = lists:map( fun(DiscSrv) -> binary_to_list(DiscSrv) end, DiscSrvTypeInfo_ ),
 
-                    %% ji redis 表 terminal:devid:connection 中保存需要连接服务器的 ip 信息（将 IP 置空）
+                    %% 向 redis 表 terminal:devid:connection 中保存需要连接服务器的 ip 信息（将 IP 置空）
                     case gen_server:call(RedisTask, {add_terminal_connections, DevMoid, DiscSrvTypeInfo}, infinity) of
                         {error, DiscSrvErr0} ->
                             lager:warning("[nms_task_control] '(Pipeline)HSET terminal:~p:connection' -- Failed! Error '~p'~n", 
@@ -1566,38 +1962,393 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%       {"conf_info",
                     %%           {obj,[{"mt_e164",<<"0512111886042">>},
                     %%                 {"conf_e164",<<"0512111886042">>},
-                    %%                 {"audio_send",
-                    %%                     [{obj,[{"audio_up_bitrate",64},
-                    %%                            {"id",1}]}]},
-                    %%                 {"audio_recv",
-                    %%                     [{obj,[{"audio_down_bitrate",64},
-                    %%                            {"audio_pkts_lose",64},
-                    %%                            {"audio_pkts_loserate",2},
-                    %%                            {"id",1}]}]},
-                    %%                 {"privideo_send",
-                    %%                     [{obj,[{"framerate",25},
-                    %%                            {"video_resource_exist",1},
-                    %%                            {"id",1},
-                    %%                            {"video_up_bitrate",256}]}]},
-                    %%                 {"privideo_recv",
-                    %%                     [{obj,[{"framerate",25},
-                    %%                            {"id",1},
-                    %%                            {"video_down_bitrate",256},
-                    %%                            {"video_pkts_loserate",5},
-                    %%                            {"video_pkts_lose",555}]}]},
-                    %%                 {"assvideo_send",
-                    %%                     [{obj,[{"framerate",25},
-                    %%                            {"video_resource_exist",1},
-                    %%                            {"id",1},
-                    %%                            {"video_up_bitrate",256}]}]},
-                    %%                 {"assvideo_recv",
-                    %%                     [{obj,[{"framerate",5},  
-                    %%                            {"id",1},
-                    %%                            {"video_down_bitrate",256},
-                    %%                            {"video_pkts_loserate",5},
-                    %%                            {"video_pkts_lose",500}]}]}]}},
+                    %%                 {"bitrate",328},
+                    %%                 {"privideo_send", [
+                    %%                     {obj,[{"id",1},
+                    %%                           {"video_resource_exist",1},
+                    %%                           {"format",0},
+                    %%                           {"framerate",25},
+                    %%                           {"video_up_bitrate",256}]},
+                    %%                     {obj,[{"id",2},
+                    %%                           {"video_resource_exist",1},
+                    %%                           {"format",0},
+                    %%                           {"framerate",25},
+                    %%                           {"video_up_bitrate",256}]},
+                    %%                     {obj,[{"id",3},
+                    %%                           {"video_resource_exist",0},
+                    %%                           {"format",0},
+                    %%                           {"framerate",30},
+                    %%                           {"video_up_bitrate",256}]}]},
+                    %%                 {"privideo_recv", [
+                    %%                     {obj,[{"id",1},
+                    %%                           {"format",0},
+                    %%                           {"framerate",25},
+                    %%                           {"video_pkts_lose",555},
+                    %%                           {"video_pkts_loserate",5},
+                    %%                           {"video_down_bitrate",256}]}]},
+                    %%                 {"assvideo_send", [
+                    %%                     {obj,[{"id",1},
+                    %%                           {"video_resource_exist",1},
+                    %%                           {"format",0},
+                    %%                           {"framerate",25},
+                    %%                           {"video_up_bitrate",256}]}]},
+                    %%                 {"assvideo_recv", [
+                    %%                     {obj,[{"id",1},
+                    %%                           {"format",0},
+                    %%                           {"framerate",5},
+                    %%                           {"video_pkts_lose",500},
+                    %%                           {"video_pkts_loserate",5},
+                    %%                           {"video_down_bitrate",256}]}]},
+                    %%                 {"audio_send", [
+                    %%                     {obj,[{"id",1},
+                    %%                           {"format",0},
+                    %%                           {"audio_up_bitrate",64}]}]},
+                    %%                 {"audio_recv", [
+                    %%                     {obj,[{"id",1},
+                    %%                           {"format",0},
+                    %%                           {"audio_pkts_lose",64},
+                    %%                           {"audio_pkts_loserate",2},
+                    %%                           {"audio_down_bitrate",64}]}]}]}},
                     %%       {"eventid",<<"EV_CONF_INFO">>}]}
                     lager:info("[nms_task_control] get 'EV_CONF_INFO' event!~n", []),
+
+                    MTState = rfc4627:get_field(JsonObj, "mt_state", undefined),
+                    ConfDesc = case MTState of 
+                        ?IN_MULTI_CONF -> "in multi-point conference";
+                        ?IN_P2P_CONF   -> "in point-to-point conference";
+                        ?NOT_IN_CONF   -> "not in conference"
+                    end,
+                    lager:info("  -->  MTState = ~p(~p)~n", [MTState, ConfDesc]),
+
+                    ConfInfo = rfc4627:get_field(JsonObj, "conf_info", undefined),
+
+                    MT_E164_ = rfc4627:get_field(ConfInfo, "mt_e164", undefined),
+                    lager:info("  -->  MT_E164 = ~p~n", [MT_E164_]),
+                    MT_E164 = binary_to_list(MT_E164_),
+
+                    Conf_E164_ = rfc4627:get_field(ConfInfo, "conf_e164", undefined),
+                    lager:info("  -->  Conf_E164 = ~p~n", [Conf_E164_]),
+                    Conf_E164 = binary_to_list(Conf_E164_),
+
+                    ConfBitRate_ = rfc4627:get_field(ConfInfo, "bitrate", undefined),
+                    lager:info("  -->  ConfBitRate = ~p~n", [ConfBitRate_]),
+                    ConfBitRate = integer_to_list(ConfBitRate_),
+
+
+                    %% 只针对主视频源的上行存在情况进行告警相关处理
+                    PriVideoSend = rfc4627:get_field(ConfInfo, "privideo_send", undefined),
+                    if
+                        PriVideoSend =/= undefined ->
+
+                            Fun0 = fun(ChannelInfo) ->
+                                ChannelID = rfc4627:get_field(ChannelInfo, "id", undefined),
+                                WarningCode = channelid_to_warningcode(ChannelID),
+                                lager:info("[nms_task_control] WarningCode = ~p~n", [WarningCode]),
+                                VideoSrcLostTriggered = case rfc4627:get_field(ChannelInfo, "video_resource_exist", undefined) of 
+                                    0 -> 
+                                        true;
+                                    1 -> 
+                                        false;
+                                    _ ->
+                                        lager:warning("[nms_task_control] Find no video_resource_exist, Assume =0~n", []),
+                                        true
+                                end,
+                    %% ------------------------------------------------------------
+
+                                update_mysql_warning_info(VideoSrcLostTriggered,MySQLTask,DevMoid,DomainMoid,
+                                    ?TERMINAL,StatisticTime,EventID,WarningCode), 
+
+                    %% ------------------------------------------------------------
+
+                                update_redis_warning_info(VideoSrcLostTriggered,RedisTask,DevMoid,?TERMINAL,WarningCode)
+
+                    %% ------------------------------------------------------------
+                            end,
+
+                            lists:foreach(Fun0, PriVideoSend);
+                        true ->
+                            lager:warning("[nms_task_control] privideo_send not exist! Weird!~n", [])
+                    end,
+
+                    %% 将会议详情信息保存到 redis 表 terminal:devid:meetingdetail 中，不区分点对点还是多点会议
+                    case gen_server:call(RedisTask, {add_terminal_meeting_detail, DevMoid, MT_E164, Conf_E164, ConfBitRate}, infinity) of
+                        {error, MTConfInfoErr0} ->
+                            lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail' -- Failed! Error '~p'~n", 
+                                [DevMoid, MTConfInfoErr0]);
+                        _ ->
+                            lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail' -- Success!~n", [DevMoid])
+                    end,
+
+                    %% 将会议音视频路数信息分别保存到如下 redis 表中
+                    %% terminal:devid:meetingdetail:privideo_send_channel
+                    %% terminal:devid:meetingdetail:privideo_recv_channel
+                    %% terminal:devid:meetingdetail:assvideo_send_channel
+                    %% terminal:devid:meetingdetail:assvideo_recv_channel
+                    %% terminal:devid:meetingdetail:audio_send_channel
+                    %% terminal:devid:meetingdetail:audio_recv_channel
+
+                    Fun1 = fun(ChannelInfo, Acc) ->
+                        ChannelID = rfc4627:get_field(ChannelInfo, "id", undefined),
+                        if
+                            ChannelID == undefined ->
+                                Acc;
+                            true ->
+                                [ChannelID|Acc]
+                        end
+                    end,
+
+                    if
+                        PriVideoSend =/= undefined ->
+                            PriVideoSendChanList = lists:reverse(lists:foldl(Fun1, [], PriVideoSend)),
+                            sadd_chan_index(RedisTask, DevMoid, privideo_send_chan, PriVideoSendChanList);
+                        true -> void
+                    end,
+
+                    PriVideoRecv = rfc4627:get_field(ConfInfo, "privideo_recv", undefined),
+                    if
+                        PriVideoRecv =/= undefined ->
+                            PriVideoRecvChanList = lists:reverse(lists:foldl(Fun1, [], PriVideoRecv)),
+                            sadd_chan_index(RedisTask, DevMoid, privideo_recv_chan, PriVideoRecvChanList);
+                        true -> void
+                    end,
+
+                    AssVideoSend = rfc4627:get_field(ConfInfo, "assvideo_send", undefined),
+                    if
+                        AssVideoSend =/= undefined ->
+                            AssVideoSendChanList = lists:reverse(lists:foldl(Fun1, [], AssVideoSend)),
+                            sadd_chan_index(RedisTask, DevMoid, assvideo_send_chan, AssVideoSendChanList);
+                        true -> void
+                    end,
+
+                    AssVideoRecv = rfc4627:get_field(ConfInfo, "assvideo_recv", undefined),
+                    if
+                        AssVideoRecv =/= undefined ->
+                            AssVideoRecvChanList = lists:reverse(lists:foldl(Fun1, [], AssVideoRecv)),
+                            sadd_chan_index(RedisTask, DevMoid, assvideo_recv_chan, AssVideoRecvChanList);
+                        true -> void
+                    end,
+
+                    AudioSend = rfc4627:get_field(ConfInfo, "audio_send", undefined),
+                    if
+                        AudioSend =/= undefined ->
+                            AudioSendChanList = lists:reverse(lists:foldl(Fun1, [], AudioSend)),
+                            sadd_chan_index(RedisTask, DevMoid, audio_send_chan, AudioSendChanList);
+                        true -> void
+                    end,
+
+                    AudioRecv = rfc4627:get_field(ConfInfo, "audio_recv", undefined),
+                    if
+                        AudioRecv =/= undefined ->
+                            AudioRecvChanList = lists:reverse(lists:foldl(Fun1, [], AudioRecv)),
+                            sadd_chan_index(RedisTask, DevMoid, audio_recv_chan, AudioRecvChanList);
+                        true -> void
+                    end,
+
+
+                    %% privideo_send 详细信息保存
+                    Fun_pvs = fun(ChannelInfo) ->
+
+                        %% common
+                        ChanID_ = rfc4627:get_field(ChannelInfo, "id", undefined),
+                        ChanID = integer_to_list(ChanID_),
+                        Format    = rfc4627:get_field(ChannelInfo, "format", undefined),
+
+                        %% privideo_send
+                        VideoSrcLost     = rfc4627:get_field(ChannelInfo, "video_resource_exist", undefined),
+                        Framerate        = rfc4627:get_field(ChannelInfo, "framerate", undefined),
+                        VideoUpBitrate   = rfc4627:get_field(ChannelInfo, "video_up_bitrate", undefined),
+
+                        KeyValuePairs = [
+                            "id",                     ChanID,
+                            "format",                 video_format_trans(Format),
+                            "video_resource_exist",   integer_to_list(VideoSrcLost),
+                            "framerate",              integer_to_list(Framerate),
+                            "video_up_bitrate",       integer_to_list(VideoUpBitrate)
+                        ],
+
+                        %% 将主视频发送通道信息保存到 redis 表 terminal:devid:meetingdetail:privideo_send_chan:N 中
+                        case gen_server:call(RedisTask, 
+                                {add_terminal_channel_detail, DevMoid, privideo_send_chan, ChanID, KeyValuePairs}, infinity) of
+                            {error, MTConfInfoErr1} ->
+                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:privideo_send_chan:~p' -- Failed! 
+                                    Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr1]);
+                            _ ->
+                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:privideo_send_chan:~p' -- Success!~n", 
+                                    [DevMoid, ChanID])
+                        end
+                    end,
+                    lists:foreach(Fun_pvs, PriVideoSend),
+
+
+                    %% privideo_recv 详细信息保存
+                    Fun_pvr = fun(ChannelInfo) ->
+
+                        %% common
+                        ChanID_ = rfc4627:get_field(ChannelInfo, "id", undefined),
+                        ChanID = integer_to_list(ChanID_),
+                        Format    = rfc4627:get_field(ChannelInfo, "format", undefined),
+
+                        %% privideo_recv
+                        VideoPktLost     = rfc4627:get_field(ChannelInfo, "video_pkts_lose", undefined),
+                        VideoPktLostRate = rfc4627:get_field(ChannelInfo, "video_pkts_loserate", undefined),
+                        VideoDownBitrate = rfc4627:get_field(ChannelInfo, "video_down_bitrate", undefined),
+
+                        KeyValuePairs = [
+                            "id",                     ChanID,
+                            "format",                 video_format_trans(Format),
+                            "video_pkts_lose",        integer_to_list(VideoPktLost),
+                            "video_pkts_loserate",    integer_to_list(VideoPktLostRate),
+                            "video_down_bitrate",     integer_to_list(VideoDownBitrate)
+                        ],
+
+                        %% 将主视频接收通道信息保存到 redis 表 terminal:devid:meetingdetail:privideo_recv_chan:N 中
+                        case gen_server:call(RedisTask, 
+                                {add_terminal_channel_detail, DevMoid, privideo_recv_chan, ChanID, KeyValuePairs}, infinity) of
+                            {error, MTConfInfoErr2} ->
+                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:privideo_recv_chan:~p' -- Failed! 
+                                    Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr2]);
+                            _ ->
+                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:privideo_recv_chan:~p' -- Success!~n", 
+                                    [DevMoid, ChanID])
+                        end
+                    end,
+                    lists:foreach(Fun_pvr, PriVideoRecv),
+
+
+                    %% assvideo_send 详细信息保存
+                    Fun_avs = fun(ChannelInfo) ->
+
+                        %% common
+                        ChanID_ = rfc4627:get_field(ChannelInfo, "id", undefined),
+                        ChanID = integer_to_list(ChanID_),
+                        Format    = rfc4627:get_field(ChannelInfo, "format", undefined),
+
+                        %% assvideo_send
+                        VideoSrcLost     = rfc4627:get_field(ChannelInfo, "video_resource_exist", undefined),
+                        Framerate        = rfc4627:get_field(ChannelInfo, "framerate", undefined),
+                        VideoUpBitrate   = rfc4627:get_field(ChannelInfo, "video_up_bitrate", undefined),
+
+                        KeyValuePairs = [
+                            "id",                     ChanID,
+                            "format",                 video_format_trans(Format),
+                            "video_resource_exist",   integer_to_list(VideoSrcLost),
+                            "framerate",              integer_to_list(Framerate),
+                            "video_up_bitrate",       integer_to_list(VideoUpBitrate)
+                        ],
+
+                        %% 将辅视频发送通道信息保存到 redis 表 terminal:devid:meetingdetail:assvideo_send_chan:N 中
+                        case gen_server:call(RedisTask, 
+                                {add_terminal_channel_detail, DevMoid, assvideo_send_chan, ChanID, KeyValuePairs}, infinity) of
+                            {error, MTConfInfoErr3} ->
+                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:assvideo_send_chan:~p' -- Failed! 
+                                    Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr3]);
+                            _ ->
+                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:assvideo_send_chan:~p' -- Success!~n", 
+                                    [DevMoid, ChanID])
+                        end
+                    end,
+                    lists:foreach(Fun_avs, AssVideoSend),
+
+
+                    %% assvideo_recv 详细信息保存
+                    Fun_avr = fun(ChannelInfo) ->
+
+                        %% common
+                        ChanID_ = rfc4627:get_field(ChannelInfo, "id", undefined),
+                        ChanID = integer_to_list(ChanID_),
+                        Format    = rfc4627:get_field(ChannelInfo, "format", undefined),
+
+                        %% assvideo_recv
+                        VideoPktLost     = rfc4627:get_field(ChannelInfo, "video_pkts_lose", undefined),
+                        VideoPktLostRate = rfc4627:get_field(ChannelInfo, "video_pkts_loserate", undefined),
+                        VideoDownBitrate = rfc4627:get_field(ChannelInfo, "video_down_bitrate", undefined),
+
+                        KeyValuePairs = [
+                            "id",                     ChanID,
+                            "format",                 video_format_trans(Format),
+                            "video_pkts_lose",        integer_to_list(VideoPktLost),
+                            "video_pkts_loserate",    integer_to_list(VideoPktLostRate),
+                            "video_down_bitrate",     integer_to_list(VideoDownBitrate)
+                        ],
+
+                        %% 将辅视频接收通道信息保存到 redis 表 terminal:devid:meetingdetail:assvideo_recv_chan:N 中
+                        case gen_server:call(RedisTask, 
+                                {add_terminal_channel_detail, DevMoid, assvideo_recv_chan, ChanID, KeyValuePairs}, infinity) of
+                            {error, MTConfInfoErr4} ->
+                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:assvideo_recv_chan:~p' -- Failed! 
+                                    Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr4]);
+                            _ ->
+                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:assvideo_recv_chan:~p' -- Success!~n", 
+                                    [DevMoid, ChanID])
+                        end
+                    end,
+                    lists:foreach(Fun_avr, AssVideoRecv),
+
+
+                    %% audio_send 详细信息保存
+                    Fun_as = fun(ChannelInfo) ->
+
+                        %% common
+                        ChanID_ = rfc4627:get_field(ChannelInfo, "id", undefined),
+                        ChanID = integer_to_list(ChanID_),
+                        Format    = rfc4627:get_field(ChannelInfo, "format", undefined),
+
+                        %% audio_send
+                        AudioUpBitrate   = rfc4627:get_field(ChannelInfo, "audio_up_bitrate", undefined),
+
+                        KeyValuePairs = [
+                            "id",                     ChanID,
+                            "format",                 audio_format_trans(Format),
+                            "audio_up_bitrate",       integer_to_list(AudioUpBitrate)
+                        ],
+
+                        %% 将音频发送通道信息保存到 redis 表 terminal:devid:meetingdetail:audio_send_chan:N 中
+                        case gen_server:call(RedisTask, 
+                                {add_terminal_channel_detail, DevMoid, audio_send_chan, ChanID, KeyValuePairs}, infinity) of
+                            {error, MTConfInfoErr5} ->
+                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:audio_send_chan:~p' -- Failed! 
+                                    Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr5]);
+                            _ ->
+                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:audio_send_chan:~p' -- Success!~n", 
+                                    [DevMoid, ChanID])
+                        end
+                    end,
+                    lists:foreach(Fun_as, AudioSend),
+
+
+                    %% audio_recv 详细信息保存
+                    Fun_ar = fun(ChannelInfo) ->
+
+                        %% common
+                        ChanID_ = rfc4627:get_field(ChannelInfo, "id", undefined),
+                        ChanID = integer_to_list(ChanID_),
+                        Format    = rfc4627:get_field(ChannelInfo, "format", undefined),
+
+                        %% audio_recv
+                        AudioPktLost     = rfc4627:get_field(ChannelInfo, "audio_pkts_lose", undefined),
+                        AudioPktLoseRate = rfc4627:get_field(ChannelInfo, "audio_pkts_loserate", undefined),
+                        AudioDownBitrate = rfc4627:get_field(ChannelInfo, "audio_down_bitrate", undefined),
+
+                        KeyValuePairs = [
+                            "id",                     ChanID,
+                            "format",                 audio_format_trans(Format),
+                            "audio_pkts_lose",        integer_to_list(AudioPktLost),
+                            "audio_pkts_loserate",    integer_to_list(AudioPktLoseRate),
+                            "audio_down_bitrate",     integer_to_list(AudioDownBitrate)
+                        ],
+
+                        %% 将音频发送通道信息保存到 redis 表 terminal:devid:meetingdetail:audio_recv_chan:N 中
+                        case gen_server:call(RedisTask, 
+                                {add_terminal_channel_detail, DevMoid, audio_recv_chan, ChanID, KeyValuePairs}, infinity) of
+                            {error, MTConfInfoErr6} ->
+                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:audio_recv_chan:~p' -- Failed! 
+                                    Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr6]);
+                            _ ->
+                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:audio_recv_chan:~p' -- Success!~n", 
+                                    [DevMoid, ChanID])
+                        end
+                    end,                    
+                    lists:foreach(Fun_ar, AudioRecv),
 
                     io:format("", []);
 
@@ -1613,11 +2364,59 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
             throw(redis_connection_lost)
     end.
 
-collector_offline_proc(_JsonObj, _RedisTask, _MySQLTask) ->
-    void.
+collector_heartbeat_proc(JsonObj, RedisTask, _MySQLTask) ->
 
-collector_heartbeat_proc(_JsonObj, _RedisTask, _MySQLTask) ->
-    void.
+    %% rpttime 格式     year-month-day/hour:min:sec
+    %% rpttime 格式变更 year/month/day:hour:min:sec
+    StatisticTime_ = rfc4627:get_field(JsonObj, "rpttime", undefined),
+    case StatisticTime_ of
+        undefined ->
+            {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
+            StatisticTime = integer_to_list(Year)++"/"++integer_to_list(Month)++"/"++integer_to_list(Day)++":"++
+                            integer_to_list(Hour)++":"++integer_to_list(Min)++":"++integer_to_list(Sec),
+            lager:info("[nms_task_control] find no rpttime, so make it myself:~p~n", 
+                [StatisticTime]);
+        _ ->
+            StatisticTime = binary_to_list(StatisticTime_)
+    end,
+    lager:info("  -->  StatisticTime = ~p~n", [StatisticTime]),
+
+    EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
+    lager:info("  -->  EventID = ~p~n", [EventID]),
+
+    %% 通过 "eventid" 判定为信息类型
+    case EventID of
+
+        <<"EV_COLLECTOR_HEARTBEAT">>     ->
+            %% 消息举例
+            %% {obj,[{"devtype",<<"COLLECTOR">>},
+            %%       {"rpttime",<<"2015/1/14:14:6:40">>},
+            %%       {"collectorid",<<"60a44c502a60">>},
+            %%       {"eventid",<<"EV_COLLECTOR_HEARTBEAT">>}]}
+
+            lager:info("[nms_task_control] get 'EV_COLLECTOR_HEARTBEAT' event!~n", []),
+
+            CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
+            lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
+            CollectorID = binary_to_list(CollectorID_),
+
+            update_timer_by_collectorid(RedisTask, CollectorID),
+
+            %% 向 Redis 表 collector 中保存 collectorid
+            %% 此操作存在冗余，后续待优化
+            case gen_server:call(RedisTask, {add_collectorid, CollectorID}, infinity) of
+                {error, CollectorHBErr0} ->
+                    lager:warning("[nms_task_control] 'SADD collector ~p' -- Failed! Error '~p'~n", 
+                        [CollectorID, CollectorHBErr0]);
+                {ok, _} ->
+                    lager:info("[nms_task_control] 'SADD collector ~p' -- Success!~n", [CollectorID])
+            end,            
+
+            io:format("", []);
+
+        OtherEvent     ->
+            lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
+    end.
 
 
 %% 此函数内部均没有进行异常处理，若 rfc4627:get_field 返回 undefined 则崩溃
@@ -1643,12 +2442,6 @@ msg_parser(JsonObj, #state{redis_task=RedisTask, mysql_task=MySQLTask}) ->
             lager:notice("<=============== TERMINAL DEVICE ===============>"),
             terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type),
             lager:notice("<=============== TERMINAL DEVICE ===============>"),
-            io:format("", []);
-        {collector, offline}  ->
-            lager:info("Devtype => {collector, offline}~n", []),
-            lager:notice("<=============== COLLECTOR OFFLINE ===============>"),
-            collector_offline_proc(JsonObj, RedisTask, MySQLTask),
-            lager:notice("<=============== COLLECTOR OFFLINE ===============>"),
             io:format("", []);
         {collector, heartbeat}  ->
             lager:info("Devtype => {collector, heartbeat}~n", []),
@@ -1690,7 +2483,7 @@ handle_info( {#'basic.deliver'{}, Payload}, State) ->
     case rfc4627:decode(Payload) of
         {ok, Result, Remainder} ->
             lager:notice("#####  rfc4627:decode  #####"),
-            %%io:format("Result=~p~n~nRemainder=~p~n~n", [Result, Remainder]),
+            io:format("Result=~p~n~nRemainder=~p~n~n", [Result, Remainder]),
             lager:info("~n~nResult=~p~n~nRemainder=~p~n~n", [Result, Remainder]),
             lager:notice("#####  rfc4627:decode  #####"),
             msg_parser(Result, State);
@@ -1699,6 +2492,39 @@ handle_info( {#'basic.deliver'{}, Payload}, State) ->
             lager:error("after rfc4627:decode   --> ~nerror=[~p]~n", [Error])
     end,
     {noreply, State};
+
+handle_info({timeout, TimerRef, {delete_collector_info, CollectorID}=Msg}, #state{redis_task=RedisTask} = State) ->
+    lager:notice("######  Recv {timeout, ~p, ~p}", [TimerRef, Msg]),
+
+    %% 删除 Redis 的 SET 表 collector:collectorid:online
+    case gen_server:call(RedisTask, {del_collector_online_device_all, CollectorID}, infinity) of
+        {error, TimeOutErr0} ->
+            lager:warning("[nms_task_control] 'DEL collector:~p:online' -- Failed! Error '~p'~n", 
+                [CollectorID, TimeOutErr0]);
+        {ok, _} ->
+            lager:info("[nms_task_control] 'DEL collector:~p:online' -- Success!~n", [CollectorID])
+    end,
+
+    %% 删除 Redis 的 HASH 表 collector:collectorid:timer
+    case gen_server:call(RedisTask, {del_heartbeat_timer_by_collectorid, CollectorID}, infinity) of
+        {error, TimeOutErr1} ->
+            lager:warning("[nms_task_control] 'DEL collector:~p:timer' -- Failed! Error '~p'~n", 
+                [CollectorID, TimeOutErr1]);
+        {ok, _} ->
+            lager:info("[nms_task_control] 'DEL collector:~p:timer' -- Success!~n", [CollectorID])
+    end,
+
+    %% 删除 Redis 的 SET 表 collector 中的 collectorid
+    case gen_server:call(RedisTask, {del_collectorid, CollectorID}, infinity) of
+        {error, TimeOutErr2} ->
+            lager:warning("[nms_task_control] 'SREM collector ~p' -- Failed! Error '~p'~n", 
+                [CollectorID, TimeOutErr2]);
+        {ok, _} ->
+            lager:info("[nms_task_control] 'SREM collector ~p' -- Success!~n", [CollectorID])
+    end,
+
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
