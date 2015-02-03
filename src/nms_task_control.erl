@@ -176,25 +176,27 @@ devtype_distinguish(Devtype) ->
                     <<"PAS">>       -> {logical, 'PAS'};   %% Protocol Access Server
                     %% 不区分核心域和平台域 UPS
                     %%<<"UPS">>       -> {logical, 'UPS'};   %% Unified Presence Server
-                    <<"CSS">>       -> {logical, 'CSS'};   %% Conference Schedule Server
-                    <<"CMS">>       -> {logical, 'CMS'};   %% Conference Management Server
-                    <<"MRS">>       -> {logical, 'MRS'};   %% Media Relay Server
-                    <<"MPS">>       -> {logical, 'MPS'};   %% Media Processing Server
-                    <<"IVR">>       -> {logical, 'IVR'};   %% Interactive  Voice Response
-                    <<"CMC">>       -> {logical, 'CMC'};   %% Conference Management Console
-                    <<"TVS">>       -> {logical, 'TVS'};   %% TV-WALL Server
-                    <<"XMPP">>      -> {logical, 'XMPP'};  %% The Extensible Messaging and Presence Protocol
-                    <<"SNS">>       -> {logical, 'SNS'};   %% Social Networking Services
-                    <<"LGS">>       -> {logical, 'LGS'};   %% Log Server
-                    <<"NTP">>       -> {logical, 'NTP'};   %% Network Time Protocol
-                    <<"SUS">>       -> {logical, 'SUS'};   %% Software Update Server
-                    <<"SDS">>       -> {logical, 'SDS'};   %% Scalable Deployment Serve
-                    <<"NDS">>       -> {logical, 'NDS'};   %% Network Detect Server
-                    <<"LBS">>       -> {logical, 'LBS'};   %% Load Balance Server
-                    <<"DRM">>       -> {logical, 'DRM'};   %% Dynamic Resource Management
-                    <<"ZK">>        -> {logical, 'ZK'};    %% Zookeeper
-                    <<"MQ">>        -> {logical, 'MQ'};    %% MQ
-                    <<"REDIS">>     -> {logical, 'REDIS'}; %% REDIS
+                    <<"MPCD">>      -> {logical, 'MPCD'};   %% MPCD
+                    <<"CSS">>       -> {logical, 'CSS'};    %% Conference Schedule Server
+                    <<"CMS">>       -> {logical, 'CMS'};    %% Conference Management Server
+                    <<"MRS">>       -> {logical, 'MRS'};    %% Media Relay Server
+                    <<"MPS">>       -> {logical, 'MPS'};    %% Media Processing Server
+                    <<"IVR">>       -> {logical, 'IVR'};    %% Interactive  Voice Response
+                    <<"CMC">>       -> {logical, 'CMC'};    %% Conference Management Console
+                    <<"TVS">>       -> {logical, 'TVS'};    %% TV-WALL Server
+                    <<"XMPP">>      -> {logical, 'XMPP'};   %% The Extensible Messaging and Presence Protocol
+                    <<"SNS">>       -> {logical, 'SNS'};    %% Social Networking Services
+                    <<"LGS">>       -> {logical, 'LGS'};    %% Log Server
+                    <<"NTP">>       -> {logical, 'NTP'};    %% Network Time Protocol
+                    <<"SUS">>       -> {logical, 'SUS'};    %% Software Update Server
+                    <<"SUSMGR">>    -> {logical, 'SUSMGR'}; %% SUS Manager
+                    <<"SDS">>       -> {logical, 'SDS'};    %% Scalable Deployment Serve
+                    <<"NDS">>       -> {logical, 'NDS'};    %% Network Detect Server
+                    <<"LBS">>       -> {logical, 'LBS'};    %% Load Balance Server
+                    <<"DRM">>       -> {logical, 'DRM'};    %% Dynamic Resource Management
+                    <<"ZK">>        -> {logical, 'ZK'};     %% Zookeeper
+                    <<"MQ">>        -> {logical, 'MQ'};     %% MQ
+                    <<"REDIS">>     -> {logical, 'REDIS'};  %% REDIS
 
                     %% 机框
                     <<"UMU">>       -> {logical, 'UMU'};   %% Unified Management Unit
@@ -777,8 +779,6 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
 
-                    update_timer_by_collectorid(RedisTask, CollectorID),
-                    
                     %%  设置 Redis 表 p_server:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_physical_server_online, DevMoid}, infinity) of
                         {error, PhyDevOnlineErr0} ->
@@ -821,8 +821,6 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
 
-                    update_timer_by_collectorid(RedisTask, CollectorID),
-                    
                     %%  删除 Redis 表 p_server:devid:online
                     case gen_server:call(RedisTask, {del_physical_server_online, DevMoid}, infinity) of
                         {error, PhyDevOfflineErr0} ->
@@ -1240,10 +1238,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
     end.
 
 
-logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
-    DevGuid_ = rfc4627:get_field(JsonObj, "devid", undefined),
-    lager:info("  -->  DevGuid = ~p~n", [DevGuid_]),
-    DevGuid = binary_to_list(DevGuid_),
+logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
     %% rpttime 格式 year-month-day/hour:min:sec
     StatisticTime_ = rfc4627:get_field(JsonObj, "rpttime", undefined),
@@ -1262,39 +1257,43 @@ logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
     EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
     lager:info("  -->  EventID = ~p~n", [EventID]),
 
+    DevGuid_ = rfc4627:get_field(JsonObj, "devid", undefined),
+    lager:info("  -->  Logical Device Guid = ~p~n", [DevGuid_]),
+    DevGuid = binary_to_list(DevGuid_),
+
     %% 通过 "devid" 在 redis 中查询当前逻辑设备所属的域 ID
     case gen_server:call(RedisTask, {get_logic_server_info_by_guid, DevGuid_}, infinity) of
-        { ok, {DevMoid_, DevGuid_, PServerMoid, DomainMoid_, DevName, IP, Type} } ->
-            lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
-            lager:info("  -->  PServerMoid = ~p~n", [PServerMoid]),
-            lager:info("  -->  DomainMoid = ~p~n", [DomainMoid_]),
-            lager:info("  -->  DevName = ~p~n", [DevName]),
+        { ok, {DevMoid_, DevGuid_, PlatformDomainMoid_, DomainMoid_, DevName, IP, Type} } ->
+            lager:info("  -->  Logical Device Moid = ~p~n", [DevMoid_]),
+            lager:info("  -->  Platform Domain Moid = ~p~n", [PlatformDomainMoid_]),
+            lager:info("  -->  Service Domain Moid = ~p~n", [DomainMoid_]),
+            lager:info("  -->  Logical Device Name = ~p~n", [DevName]),
+            lager:info("  -->  Logical Device Type (Redis) = ~p~n", [Type]),
             lager:info("  -->  IP = ~p~n", [IP]),
-            lager:info("  -->  Type = ~p~n", [Type]),
 
             DevMoid = binary_to_list(DevMoid_),
-            _DomainMoid = binary_to_list(DomainMoid_),
+            PlatformDomainMoid = binary_to_list(PlatformDomainMoid_),
+            DomainMoid = binary_to_list(DomainMoid_),
 
             DevType_ = rfc4627:get_field(JsonObj, "devtype", undefined),
             DevType = binary_to_list(DevType_),
 
             %% 通过 "eventid" 判定为信息类型
             case EventID of
+
                 <<"EV_DEV_ONLINE">>     ->
                     %% 消息举例
                     %% {obj,[{"eventid",<<"EV_DEV_ONLINE">>},
                     %%       {"devid",<<"1111">>},
                     %%       {"devtype",<<"SERVICE_TS_SRV_MPCD">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
-                    %% 
+
                     lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
 
-                    update_timer_by_collectorid(RedisTask, CollectorID),
-                    
                     %%  设置 Redis 表 l_server:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_logic_server_online, DevMoid}, infinity) of
                         {error, LogDevOnlineErr0} ->
@@ -1324,21 +1323,20 @@ logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
                     end,
 
                     io:format("", []);
+
                 <<"EV_DEV_OFFLINE">>     ->
                     %% 消息举例
                     %% {obj,[{"eventid",<<"EV_DEV_OFFLINE">>},
                     %%       {"devid",<<"1111">>},
                     %%       {"devtype",<<"SERVICE_TS_SRV_MPCD">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
-                    %% 
+
                     lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
 
-                    update_timer_by_collectorid(RedisTask, CollectorID),
-                    
                     %%  删除 Redis 表 l_server:devid:online
                     case gen_server:call(RedisTask, {del_logic_server_online, DevMoid}, infinity) of
                         {error, LogDevOfflineErr0} ->
@@ -1376,7 +1374,1063 @@ logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
                                 [CollectorID, DevType, DevGuid])
                     end,
 
+                    case CustomType of
+                        'PAS' ->
+                            %% 从 redis 的 SET 表 pas_in_all_domains 中删除 domain:PlatformDomainMoid:pas:pas_moid 字符串
+                            CompletePasDomainInfo = "domain:" ++ PlatformDomainMoid ++ ":pas:" ++ DevMoid,
+                            case gen_server:call(RedisTask, {del_pas_in_all_domains, CompletePasDomainInfo}, infinity) of
+                                {error, LogDevOfflineErr4} ->
+                                    lager:warning("[nms_task_control] 'SREM pas_in_all_domains ~p' -- Failed! Error '~p'~n", 
+                                        [CompletePasDomainInfo, LogDevOfflineErr4]);
+                                {ok, _} ->
+                                    lager:info("[nms_task_control] 'SREM pas_in_all_domains ~p' -- Success!~n", 
+                                        [CompletePasDomainInfo])
+                            end;
+                        'XMPP' ->
+                            %% 从 redis 的 SET 表 xmpp_in_all_domains 中删除 domain:DomainMoid:xmpp_online 字符串
+                            XmppDomainKey = "domain:" ++ DomainMoid ++ ":xmpp_online",
+                            case gen_server:call(RedisTask, {del_xmpp_in_all_domains, XmppDomainKey}, infinity) of
+                                {error, LogDevOfflineErr5} ->
+                                    lager:warning("[nms_task_control] 'SREM xmpp_in_all_domains ~p' -- Failed! Error '~p'~n", 
+                                        [XmppDomainKey, LogDevOfflineErr5]);
+                                {ok, _} ->
+                                    lager:info("[nms_task_control] 'SREM xmpp_in_all_domains ~p' -- Success!~n", 
+                                        [XmppDomainKey])
+                            end;
+                        _ ->
+                            void
+                    end,
+
                     io:format("", []);
+
+                <<"EV_XMPP_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"XMPP">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"xmppinfo",
+                    %%           {obj,[{"onlinecount",123}]}},
+                    %%       {"eventid",<<"EV_XMPP_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_XMPP_INFO' event!~n", []),
+
+                    XmppVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  XMPP Version = ~p~n", [XmppVersion_]),
+
+                    XmppInfo = rfc4627:get_field(JsonObj, "xmppinfo", undefined),
+                    OnlineNum = rfc4627:get_field(XmppInfo, "onlinecount", undefined),
+                    lager:info("  -->  XMPP Online = ~p~n", [OnlineNum]),
+
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  XMPP PidChanged = ~p~n", [PidChange_]),
+
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(mcu_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                    %% 向 redis 的 STRING 表 domain:DomainMoid:xmpp_online 中保存 XMPP 在线数
+                    case gen_server:call(RedisTask, {add_xmpp_online_statistic, DomainMoid, OnlineNum}, infinity) of
+                        {error, XmppInfoErr0} ->
+                            lager:warning("[nms_task_control] 'SET domain:~p:xmpp_online ~p' -- Failed! Error '~p'~n", 
+                                [DomainMoid, OnlineNum, XmppInfoErr0]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SET domain:~p:xmpp_online ~p' -- Success!~n", 
+                                [DomainMoid, OnlineNum])
+                    end,
+
+                    %% 向 redis 的 SET 表 xmpp_in_all_domains 中保存 domain:DomainMoid:xmpp_online 字符串
+                    XmppDomainKey = "domain:" ++ DomainMoid ++ ":xmpp_online",
+                    case gen_server:call(RedisTask, {add_xmpp_in_all_domains, XmppDomainKey}, infinity) of
+                        {error, XmppInfoErr1} ->
+                            lager:warning("[nms_task_control] 'SADD xmpp_in_all_domains ~p' -- Failed! Error '~p'~n", 
+                                [XmppDomainKey, XmppInfoErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD xmpp_in_all_domains ~p' -- Success!~n", [XmppDomainKey])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_NDS_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"NDS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"ndsinfo",
+                    %%           {obj,[{"maxtestcount",123},
+                    %%                 {"currtestcount",123}]}},
+                    %%       {"eventid",<<"EV_NDS_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_NDS_INFO' event!~n", []),
+
+                    NdsVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  NDS Version = ~p~n", [NdsVersion_]),
+
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  NDS PidChanged = ~p~n", [PidChange_]),
+
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(mcu_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                     %% 针对 ndsinfo 的处理
+
+                    io:format("", []);
+
+                <<"EV_LGS_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"LGS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"lgsinfo",
+                    %%           {obj,[{"maxsrvcount",123},
+                    %%                 {"logcount",123},
+                    %%                 {"currsrvcount",123}]}},
+                    %%       {"eventid",<<"EV_LGS_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_LGS_INFO' event!~n", []),
+
+                    LgsVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  LGS Version = ~p~n", [LgsVersion_]),
+
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  LGS PidChanged = ~p~n", [PidChange_]),
+
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(mcu_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                     %% 针对 lgsinfo 的处理
+
+                    io:format("", []);
+
+                <<"EV_APS_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"APS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"apsinfo",
+                    %%           {obj,[{"maxusercount",123},
+                    %%                 {"currusercount",123}]}},
+                    %%       {"eventid",<<"EV_APS_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_APS_INFO' event!~n", []),
+
+                    ApsVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  APS Version = ~p~n", [ApsVersion_]),
+
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  APS PidChanged = ~p~n", [PidChange_]),
+
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(mcu_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                     %% 针对 apsinfo 的处理
+
+                    io:format("", []);
+
+                <<"EV_SUSMGR_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"SUSMGR">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"susmgrinfo",
+                    %%           {obj,[{"maxregsussrvcount",123},
+                    %%                 {"curregsussrvcount",123}]}},
+                    %%       {"eventid",<<"EV_SUSMGR_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_SUSMGR_INFO' event!~n", []),
+
+                    SusMgrVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  SUS Manager Version = ~p~n", [SusMgrVersion_]),
+
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  SUS PidChanged = ~p~n", [PidChange_]),
+
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(mcu_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                     %% 针对 susmgrinfo 的处理
+
+                    io:format("", []);
+
+                <<"EV_SUS_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"SUS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"susinfo",
+                    %%           {obj,[{"maxregdevcount",123},
+                    %%                 {"curregdevcount",123}]}},
+                    %%       {"eventid",<<"EV_SUS_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_SUS_INFO' event!~n", []),
+
+                    SusVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  SUS Version = ~p~n", [SusVersion_]),
+
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  SUS PidChanged = ~p~n", [PidChange_]),
+
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(mcu_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                     %% 针对 susinfo 的处理
+
+                    io:format("", []);
+
+                <<"EV_MCU_MT_DEL">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"CMS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"mtinfo",
+                    %%           {obj,[{"endtime",<<"2014/06/16:09:57:50">>},
+                    %%                 {"mte164",<<"0512111885808">>},
+                    %%                 {"confe164",<<"0513**77">>},
+                    %%                 {"leavereason",<<"down">>},
+                    %%                 {"conftype",0}]}},
+                    %%       {"eventid",<<"EV_MCU_MT_DEL">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_MCU_MT_DEL' event!~n", []),
+
+                    MtInfo = rfc4627:get_field(JsonObj, "mtinfo", undefined),
+
+                    TerminalE164_ = rfc4627:get_field(MtInfo, "mte164", undefined),
+                    lager:info("  -->  Terminal E164 = ~p~n", [TerminalE164_]),
+                    TerminalE164 = binary_to_list(TerminalE164_), 
+
+                    ConfE164_ = rfc4627:get_field(MtInfo, "confe164", undefined),
+                    lager:info("  -->  Conf E164 = ~p~n", [ConfE164_]),
+                    ConfE164 = binary_to_list(ConfE164_), 
+
+                    TerLeaveTime_ = rfc4627:get_field(MtInfo, "endtime", undefined),
+                    lager:info("  -->  Terminal Leave Meeting Time = ~p~n", [TerLeaveTime_]),
+                    TerLeaveTime = binary_to_list(TerLeaveTime_), 
+
+                    TerLeaveReason_ = rfc4627:get_field(MtInfo, "leavereason", undefined),
+                    lager:info("  -->  Terminal Leave Meeting Reason = ~p~n", [TerLeaveReason_]),
+                    TerLeaveReason = binary_to_list(TerLeaveReason_), 
+
+                    ConfType = rfc4627:get_field(MtInfo, "conftype", undefined),
+                    case ConfType of
+                        0 ->
+                            lager:info("  -->  Conf Type = Traditional~n", []),
+
+                            %% 将 redis 的 HASH 表 t_meeting:ConfE164:info 中的 terminal 的值 -1
+                            case gen_server:call(RedisTask, {dec_traditional_meeting_terminal_num, ConfE164}, infinity) of
+                                {error, McuMtDelErr0} ->
+                                    lager:warning("[nms_task_control] 'HINCRBY t_meeting:~p:info terminal -1' -- Failed! Error '~p'~n", 
+                                        [ConfE164, McuMtDelErr0]);
+
+                                {ok, TMeetingTerNum} ->
+                                    lager:info("[nms_task_control] 'HINCRBY t_meeting:~p:info terminal -1' -- Success! TMeetingTerNum=~p~n",
+                                        [ConfE164, TMeetingTerNum])
+                            end;
+                        1 ->
+                            lager:info("  -->  Conf Type = Port~n", []),
+
+                            %% 将 redis 的 HASH 表 p_meeting:ConfE164:info 中的 terminal 的值 -1
+                            case gen_server:call(RedisTask, {dec_port_meeting_terminal_num, ConfE164}, infinity) of
+                                {error, McuMtDelErr1} ->
+                                    lager:warning("[nms_task_control] 'HINCRBY p_meeting:~p:info terminal -1' -- Failed! Error '~p'~n",
+                                        [ConfE164, McuMtDelErr1]);
+
+                                {ok, PMeetingTerNum} ->
+                                    lager:info("[nms_task_control] 'HINCRBY p_meeting:~p:info terminal -1' -- Success! PMeetingTerNum=~p~n",
+                                        [ConfE164, PMeetingTerNum])
+                            end;
+                        _ ->
+                            throw(conftype_enum_error)
+                    end,
+
+                    %% 从 redis 的 HASH 表 terminal:TerminalE164:baseinfo 查 TerminalMoid
+                    case gen_server:call(RedisTask, {get_terminal_base_info_by_e164, TerminalE164}, infinity) of
+                        {error, McuMtDelErr2} ->
+                            lager:warning("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
+                                [TerminalE164, McuMtDelErr2]),
+                            lager:warning("[nms_task_control] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
+                                [TerminalE164]),
+                            TerminalMoid_ = <<"match no domain">>;
+                        {ok, {TerminalMoid_,_,_,_}} ->
+                            lager:info("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Success! TerminalMoid=~p~n", 
+                                [TerminalE164, TerminalMoid_])
+                    end,
+                    TerminalMoid = binary_to_list(TerminalMoid_),
+
+                    %% 将 redis 的 STRING 表 terminal:TerminalMoid:conf:ConfE164:enter_times 中的值 +0（获取当前值）
+                    case gen_server:call(RedisTask, {get_terminal_enter_meeting_times, TerminalMoid, ConfE164}, infinity) of
+                        {error, McuMtDelErr3} ->
+                            lager:warning("[nms_task_control] 'INCRBY terminal:~p:conf:~p:enter_times +0' -- Failed! Error '~p'~n",
+                                [TerminalMoid, ConfE164, McuMtDelErr3]);
+
+                        {ok, TerEnterTimes_} ->
+                            lager:info("[nms_task_control] 'INCRBY terminal:~p:conf:~p:enter_times +0' -- Success! TerEnterTimes=~p~n", 
+                                [TerminalMoid, ConfE164, TerEnterTimes_]),
+
+                            TerEnterTimes = binary_to_list(TerEnterTimes_), 
+
+                            %% 向 redis 的 HASH 表 terminal:TerminalMoid:conf:ConfE164:enter_leave_info:N 中
+                            %% 保存 leave_time 和 leave_reason
+                            case gen_server:call(RedisTask, {add_terminal_leave_meeting_info, TerminalMoid, ConfE164, 
+                                    TerEnterTimes, TerLeaveTime, TerLeaveReason}, infinity) of
+                                {error, McuMtDelErr4} ->
+                                    lager:warning("[nms_task_control] 'HMSET terminal:~p:conf:~p:enter_leave_info:~p' -- Failed! Error '~p'~n",
+                                        [TerminalMoid, ConfE164, TerEnterTimes, McuMtDelErr4]);
+
+                                {ok, _} ->
+                                    lager:info("[nms_task_control] 'HMSET terminal:~p:conf:~p:enter_leave_info:~p' -- Success!~n", 
+                                        [TerminalMoid, ConfE164, TerEnterTimes])
+                            end
+                    end,
+
+                    %% 从 redis 的 SET 表 meeting:ConfE164:terminal 中删除 TerminalE164
+                    case gen_server:call(RedisTask, {del_meeting_terminal, ConfE164, TerminalE164}, infinity) of
+                        {error, McuMtDelErr5} ->
+                            lager:warning("[nms_task_control] 'SREM meeting:~p:terminal' -- Failed! Error '~p'~n", 
+                                [ConfE164, McuMtDelErr5]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SREM meeting:~p:terminal' -- Success! TerminalE164=~p~n", 
+                                [ConfE164, TerminalE164])
+                    end,
+
+                    %% 删除 redis 的 HASH 表 terminal:TerminalMoid:meetingdetail
+                    case gen_server:call(RedisTask, {del_terminal_meeting_detail, TerminalMoid}, infinity) of
+                        {error, McuMtDelErr6} ->
+                            lager:warning("[nms_task_control] 'DEL terminal:~p:meetingdetail' -- Failed! Error '~p'~n", 
+                                [TerminalMoid, McuMtDelErr6]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL terminal:~p:meetingdetail' -- Success!~n", 
+                                [TerminalMoid])
+                    end,
+
+                    %% 将如下 redis 表中的会议音视频路数相关信息全部删除
+                    %% terminal:TerminalMoid:meetingdetail:privideo_send_chan
+                    %% terminal:TerminalMoid:meetingdetail:privideo_recv_chan
+                    %% terminal:TerminalMoid:meetingdetail:assvideo_send_chan
+                    %% terminal:TerminalMoid:meetingdetail:assvideo_recv_chan
+                    %% terminal:TerminalMoid:meetingdetail:audio_send_chan
+                    %% terminal:TerminalMoid:meetingdetail:audio_recv_chan
+                    case gen_server:call(RedisTask, {del_terminal_meeting_channels, TerminalMoid}, infinity) of
+                        {error, McuMtDelErr7} ->
+                            lager:warning("[nms_task_control] 'DEL terminal:~p:meetingdetail:[chantpye]:[index]' -- Failed! Error '~p'~n", 
+                                [TerminalMoid, McuMtDelErr7]),
+                            lager:warning("[nms_task_control] 'DEL terminal:~p:meetingdetail:[chantpye]' -- Failed! Error '~p'~n", 
+                                [TerminalMoid, McuMtDelErr7]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'DEL terminal:~p:meetingdetail:[chantpye]:[index]' -- Success!~n", 
+                                [TerminalMoid]),
+                            lager:info("[nms_task_control] 'DEL terminal:~p:meetingdetail:[chantpye]' -- Success!~n", 
+                                [TerminalMoid])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_MCU_MT_ADD">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"CMS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"mtinfo",
+                    %%           {obj,[{"begintime",<<"2014/06/16:09:57:50">>},
+                    %%                 {"mte164",<<"0512111885808">>},
+                    %%                 {"confe164",<<"0513**77">>},
+                    %%                 {"conftype",0}]}},
+                    %%       {"eventid",<<"EV_MCU_MT_ADD">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_MCU_MT_ADD' event!~n", []),
+
+                    MtInfo = rfc4627:get_field(JsonObj, "mtinfo", undefined),
+
+                    TerminalE164_ = rfc4627:get_field(MtInfo, "mte164", undefined),
+                    lager:info("  -->  Terminal E164 = ~p~n", [TerminalE164_]),
+                    TerminalE164 = binary_to_list(TerminalE164_), 
+
+                    ConfE164_ = rfc4627:get_field(MtInfo, "confe164", undefined),
+                    lager:info("  -->  Conf E164 = ~p~n", [ConfE164_]),
+                    ConfE164 = binary_to_list(ConfE164_), 
+
+                    TerEnterTime_ = rfc4627:get_field(MtInfo, "begintime", undefined),
+                    lager:info("  -->  Terminal Enter Meeting Time = ~p~n", [TerEnterTime_]),
+                    TerEnterTime = binary_to_list(TerEnterTime_), 
+
+                    ConfType = rfc4627:get_field(MtInfo, "conftype", undefined),
+                    case ConfType of
+                        0 ->
+                            lager:info("  -->  Conf Type = Traditional~n", []),
+
+                            %% 将 redis 的 HASH 表 t_meeting:ConfE164:info 中的 terminal 的值 +1
+                            case gen_server:call(RedisTask, {inc_traditional_meeting_terminal_num, ConfE164}, infinity) of
+                                {error, McuMtAddErr0} ->
+                                    lager:warning("[nms_task_control] 'HINCRBY t_meeting:~p:info terminal +1' -- Failed! Error '~p'~n", 
+                                        [ConfE164, McuMtAddErr0]);
+
+                                {ok, TMeetingTerNum} ->
+                                    lager:info("[nms_task_control] 'HINCRBY t_meeting:~p:info terminal +1' -- Success! TMeetingTerNum=~p~n",
+                                        [ConfE164, TMeetingTerNum])
+                            end;
+                        1 ->
+                            lager:info("  -->  Conf Type = Port~n", []),
+
+                            %% 将 redis 的 HASH 表 p_meeting:ConfE164:info 中的 terminal 的值 +1
+                            case gen_server:call(RedisTask, {inc_port_meeting_terminal_num, ConfE164}, infinity) of
+                                {error, McuMtAddErr1} ->
+                                    lager:warning("[nms_task_control] 'HINCRBY p_meeting:~p:info terminal +1' -- Failed! Error '~p'~n",
+                                        [ConfE164, McuMtAddErr1]);
+
+                                {ok, PMeetingTerNum} ->
+                                    lager:info("[nms_task_control] 'HINCRBY p_meeting:~p:info terminal +1' -- Success! PMeetingTerNum=~p~n",
+                                        [ConfE164, PMeetingTerNum])
+                            end;
+                        _ ->
+                            throw(conftype_enum_error)
+                    end,
+
+                    %% 从 redis 的 HASH 表 terminal:TerminalE164:baseinfo 查 TerminalMoid
+                    case gen_server:call(RedisTask, {get_terminal_base_info_by_e164, TerminalE164}, infinity) of
+                        {error, McuMtAddErr2} ->
+                            lager:warning("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
+                                [TerminalE164, McuMtAddErr2]),
+                            lager:warning("[nms_task_control] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
+                                [TerminalE164]),
+                            TerminalMoid_ = <<"match no domain">>;
+                        {ok, {TerminalMoid_,_,_,_}} ->
+                            lager:info("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Success! TerminalMoid=~p~n", 
+                                [TerminalE164, TerminalMoid_])
+                    end,
+                    TerminalMoid = binary_to_list(TerminalMoid_),
+
+                    %% 将 redis 的 STRING 表 terminal:TerminalMoid:conf:ConfE164:enter_times 中的值 +1
+                    case gen_server:call(RedisTask, {inc_terminal_enter_meeting_times, TerminalMoid, ConfE164}, infinity) of
+                        {error, McuMtAddErr3} ->
+                            lager:warning("[nms_task_control] 'INCRBY terminal:~p:conf:~p:enter_times +1' -- Failed! Error '~p'~n",
+                                [TerminalMoid, ConfE164, McuMtAddErr3]);
+
+                        {ok, TerEnterTimes_} ->
+                            lager:info("[nms_task_control] 'INCRBY terminal:~p:conf:~p:enter_times +1' -- Success! TerEnterTimes=~p~n", 
+                                [TerminalMoid, ConfE164, TerEnterTimes_]),
+
+                            TerEnterTimes = binary_to_list(TerEnterTimes_), 
+
+                            %% 向 redis 的 HASH 表 terminal:TerminalMoid:conf:ConfE164:enter_leave_info:N 中保存 enter_time
+                            case gen_server:call(RedisTask, 
+                                    {add_terminal_enter_meeting_info, TerminalMoid, ConfE164, TerEnterTimes, TerEnterTime}, infinity) of
+                                {error, McuMtAddErr4} ->
+                                    lager:warning("[nms_task_control] 'HSET terminal:~p:conf:~p:enter_leave_info:~p' -- Failed! Error '~p'~n",
+                                        [TerminalMoid, ConfE164, TerEnterTimes, McuMtAddErr4]);
+
+                                {ok, _} ->
+                                    lager:info("[nms_task_control] 'HSET terminal:~p:conf:~p:enter_leave_info:~p' -- Success!~n", 
+                                        [TerminalMoid, ConfE164, TerEnterTimes])
+                            end
+                    end,
+
+                    %% 向 redis 的 SET 表 meeting:ConfE164:terminal 中保存 TerminalE164
+                    case gen_server:call(RedisTask, {add_meeting_terminal, ConfE164, TerminalE164}, infinity) of
+                        {error, McuMtAddErr5} ->
+                            lager:warning("[nms_task_control] 'SADD meeting:~p:terminal' -- Failed! Error '~p'~n", 
+                                [ConfE164, McuMtAddErr5]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD meeting:~p:terminal' -- Success! TerminalE164=~p~n", 
+                                [ConfE164, TerminalE164])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_MCU_CONF_DESTROY">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"CMS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"confinfo",
+                    %%           {obj,[{"endtime",<<"2014/06/16:10:57:50">>},
+                    %%                 {"conftype",0},
+                    %%                 {"confe164",<<"0512**999">>}]}},
+                    %%       {"eventid",<<"EV_MCU_CONF_DESTROY">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_MCU_CONF_DESTROY' event!~n", []),
+
+                    ConfInfo = rfc4627:get_field(JsonObj, "confinfo", undefined),
+
+                    ConfE164_ = rfc4627:get_field(ConfInfo, "confe164", undefined),
+                    lager:info("  -->  Conf E164 = ~p~n", [ConfE164_]),
+                    ConfE164 = binary_to_list(ConfE164_), 
+
+                    ConfType = rfc4627:get_field(ConfInfo, "conftype", undefined),
+                    case ConfType of
+                        0 ->
+                            lager:info("  -->  Conf Type = Traditional~n", []),
+
+                            case gen_server:call(RedisTask, {del_traditional_meeting, ConfE164}, infinity) of
+                                {error, McuConfDestroyErr0} ->
+                                    lager:warning("[nms_task_control] 'MULTI'~n", []),
+                                    lager:warning("[nms_task_control] 'SREM domain:ConfDomainMoid:t_meeting ~p~n", [ConfE164]),
+                                    lager:warning("[nms_task_control] 'DEL t_meeting:~p:info~n", [ConfE164]),
+                                    lager:warning("[nms_task_control] 'DEL meeting:~p:terminal~n", [ConfE164]),
+                                    lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [McuConfDestroyErr0]);
+
+                                {ok, _} ->
+                                    lager:info("[nms_task_control] 'MULTI'~n", []),
+                                    lager:info("[nms_task_control] 'SREM domain:ConfDomainMoid:t_meeting ~p~n", [ConfE164]),
+                                    lager:info("[nms_task_control] 'DEL t_meeting:~p:info~n", [ConfE164]),
+                                    lager:info("[nms_task_control] 'DEL meeting:~p:terminal~n", [ConfE164]),
+                                    lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                            end;
+                        1 ->
+                            lager:info("  -->  Conf Type = Port~n", []),
+
+                            case gen_server:call(RedisTask, {del_port_meeting, ConfE164}, infinity) of
+                                {error, McuConfDestroyErr1} ->
+                                    lager:warning("[nms_task_control] 'MULTI'~n", []),
+                                    lager:warning("[nms_task_control] 'SREM domain:ConfDomainMoid:p_meeting ~p~n", [ConfE164]),
+                                    lager:warning("[nms_task_control] 'DEL p_meeting:~p:info~n", [ConfE164]),
+                                    lager:warning("[nms_task_control] 'DEL meeting:~p:terminal~n", [ConfE164]),
+                                    lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [McuConfDestroyErr1]);
+
+                                {ok, _} ->
+                                    lager:info("[nms_task_control] 'MULTI'~n", []),
+                                    lager:info("[nms_task_control] 'SREM domain:ConfDomainMoid:p_meeting ~p~n", [ConfE164]),
+                                    lager:info("[nms_task_control] 'DEL p_meeting:~p:info~n", [ConfE164]),
+                                    lager:info("[nms_task_control] 'DEL meeting:~p:terminal~n", [ConfE164]),
+                                    lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                            end;
+                        _ ->
+                            throw(conftype_enum_error)
+                    end,
+
+                    %% 
+
+                    io:format("", []);
+
+                <<"EV_MCU_CONF_CREATE">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"CMS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"confinfo",
+                    %%           {obj,[{"confname",<<"conf-AA">>},
+                    %%                 {"confe164",<<"0513**77">>},
+                    %%                 {"conftype",0},
+                    %%                 {"confbandwidth",123},
+                    %%                 {"portcount",123},
+                    %%                 {"domainmoid",<<"112">>},
+                    %%                 {"domainname",<<"keda-AA">>},
+                    %%                 {"begintime",<<"2014/06/16:09:57:50">>},
+                    %%                 {"endtime",<<"2014/06/16:09:57:50">>}]}},
+                    %%       {"eventid",<<"EV_MCU_CONF_CREATE">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_MCU_CONF_CREATE' event!~n", []),
+
+                    ConfInfo = rfc4627:get_field(JsonObj, "confinfo", undefined),
+
+                    ConfName_ = rfc4627:get_field(ConfInfo, "confname", undefined),
+                    lager:info("  -->  Conf Name = ~p~n", [ConfName_]),
+                    ConfName = binary_to_list(ConfName_),
+
+                    ConfE164_ = rfc4627:get_field(ConfInfo, "confe164", undefined),
+                    lager:info("  -->  Conf E164 = ~p~n", [ConfE164_]),
+                    ConfE164 = binary_to_list(ConfE164_),
+
+                    ConfBandWidth = rfc4627:get_field(ConfInfo, "confbandwidth", undefined),
+                    lager:info("  -->  Conf BandWidth = ~p~n", [ConfBandWidth]),
+
+                    ConfPortNum = rfc4627:get_field(ConfInfo, "portcount", undefined),
+                    lager:info("  -->  Conf PortNum = ~p~n", [ConfPortNum]),
+
+                    ConfDomainMoid_ = rfc4627:get_field(ConfInfo, "domainmoid", undefined),
+                    lager:info("  -->  Conf DomainMoid = ~p~n", [ConfDomainMoid_]),
+                    ConfDomainMoid = binary_to_list(ConfDomainMoid_),
+
+                    ConfStartTime_ = rfc4627:get_field(ConfInfo, "begintime", undefined),
+                    lager:info("  -->  Conf StartTime = ~p~n", [ConfStartTime_]),
+                    ConfStartTime = binary_to_list(ConfStartTime_),
+
+                    ConfStopTime_ = rfc4627:get_field(ConfInfo, "endtime", undefined),
+                    lager:info("  -->  Conf StopTime = ~p~n", [ConfStopTime_]),
+                    ConfStopTime = binary_to_list(ConfStopTime_),
+
+                    ConfType = rfc4627:get_field(ConfInfo, "conftype", undefined),
+                    case ConfType of
+                        0 ->
+                            lager:info("  -->  Conf Type = Traditional~n", []),
+
+                            case gen_server:call(RedisTask, {add_traditional_meeting, ConfDomainMoid, ConfE164, ConfName, 
+                                    ConfBandWidth, "mix", ConfStartTime, ConfStopTime}, infinity) of
+                                {error, McuConfCreateErr0} ->
+                                    lager:warning("[nms_task_control] 'MULTI'~n", []),
+                                    lager:warning("[nms_task_control] 'SADD domain:~p:t_meeting ~p~n", [ConfDomainMoid, ConfE164]),
+                                    lager:warning("[nms_task_control] 'HMSET t_meeting:~p:info~n", [ConfE164]),
+                                    lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [McuConfCreateErr0]);
+
+                                {ok, _} ->
+                                    lager:info("[nms_task_control] 'MULTI'~n", []),
+                                    lager:info("[nms_task_control] 'SADD domain:~p:t_meeting ~p~n", [ConfDomainMoid, ConfE164]),
+                                    lager:info("[nms_task_control] 'HMSET t_meeting:~p:info~n", [ConfE164]),
+                                    lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                            end;
+                        1 ->
+                            lager:info("  -->  Conf Type = Port~n", []),
+
+                            case gen_server:call(RedisTask, {add_port_meeting, ConfDomainMoid, ConfE164, ConfName, ConfBandWidth, 
+                                    ConfPortNum, ConfStartTime, ConfStopTime}, infinity) of
+                                {error, McuConfCreateErr1} ->
+                                    lager:warning("[nms_task_control] 'MULTI'~n", []),
+                                    lager:warning("[nms_task_control] 'SADD domain:~p:p_meeting ~p~n", [ConfDomainMoid, ConfE164]),
+                                    lager:warning("[nms_task_control] 'HMSET p_meeting:~p:info~n", [ConfE164]),
+                                    lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [McuConfCreateErr1]);
+
+                                {ok, _} ->
+                                    lager:info("[nms_task_control] 'MULTI'~n", []),
+                                    lager:info("[nms_task_control] 'SADD domain:~p:p_meeting ~p~n", [ConfDomainMoid, ConfE164]),
+                                    lager:info("[nms_task_control] 'HMSET p_meeting:~p:info~n", [ConfE164]),
+                                    lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                            end;
+                        _ ->
+                            throw(conftype_enum_error)
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_MCU_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"CMS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"mcuinfo",
+                    %%           {obj,[{"traditionconfcount",123},
+                    %%                 {"portconfcount",123},
+                    %%                 {"spttraditionconfcount",123},
+                    %%                 {"sptportconfcount",123},
+                    %%                 {"multiconfmtcount",123},
+                    %%                 {"connectedprscount",123},
+                    %%                 {"connectednucount",123},
+                    %%                 {"connectedmpcount",123},
+                    %%                 {"connectedmpcadaptcount",123}]}},
+                    %%       {"eventid",<<"EV_MCU_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_MCU_INFO' event!~n", []),
+
+                    %% 版本信息和升级服务器有关，暂时不做处理
+                    MCUVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  MCU Version = ~p~n", [MCUVersion_]),
+                    %%MCUVersion = binary_to_list(MCUVersion_),
+
+                    %% 需要进行告警处理
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  MCU PidChanged = ~p~n", [PidChange_]),
+
+                    %% MCU 是否发生进程异常告警处理
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% MCU 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(mcu_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                     %% 针对 mcuinfo 的处理
+
+                    io:format("", []);
+
+                <<"EV_MPCD_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"MPCD">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"mpcdinfo",
+                    %%           {obj,[{"maxorderconfcount",123},
+                    %%                 {"connectednucount",123},
+                    %%                 {"connectedmpccount",123},
+                    %%                 {"conftempcount",123}]}},
+                    %%       {"eventid",<<"EV_MPCD_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_MPCD_INFO' event!~n", []),
+
+                    %% 版本信息和升级服务器有关，暂时不做处理
+                    MPCDVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  MPCD Version = ~p~n", [MPCDVersion_]),
+                    %%MPCDVersion = binary_to_list(MPCDVersion_),
+
+                    %% 需要进行告警处理
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  MPCD PidChanged = ~p~n", [PidChange_]),
+
+                    %% MPCD 是否发生进程异常告警处理
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% MPCD 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(mpcd_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                    %% 针对 mpcdinfo 的处理
+
+                    io:format("", []);
+
+                <<"EV_PAS_P2PCONF_CREATE">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"PAS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"confinfo",
+                    %%           {obj,[{"caller",
+                    %%                     {obj,[{"devtype",<<"Skywalker for iPad">>},
+                    %%                           {"devname",<<"AAA">>},
+                    %%                           {"deve164",<<"051255566">>}]}},
+                    %%                 {"callee",
+                    %%                     {obj,[{"devtype",<<"Skywalker for iPad">>},
+                    %%                           {"devname",<<"BBB">>},
+                    %%                           {"deve164",<<"051255567">>}]}},
+                    %%                 {"time",<<"2014/06/16:09:57:50">>},
+                    %%                 {"bitrate",256},
+                    %%                 {"confe164",<<"1234">>},
+                    %%                 {"confname",<<"conf-XXX">>}]}},
+                    %%       {"eventid",<<"EV_PAS_P2PCONF_CREATE">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_PAS_P2PCONF_CREATE' event!~n", []),
+
+                    P2PConfInfo = rfc4627:get_field(JsonObj, "confinfo", undefined),
+
+                    Caller = rfc4627:get_field(P2PConfInfo, "caller", undefined),
+                    CallerDevType_ = rfc4627:get_field(Caller, "devtype", undefined),
+                    lager:info("  -->  P2P CallerType = ~p~n", [CallerDevType_]),
+                    CallerType = binary_to_list(CallerDevType_),
+                    CallerDevName_ = rfc4627:get_field(Caller, "devname", undefined),
+                    lager:info("  -->  P2P CallerName = ~p~n", [CallerDevName_]),
+                    CallerName = binary_to_list(CallerDevName_),
+                    CallerDevE164_ = rfc4627:get_field(Caller, "deve164", undefined),
+                    lager:info("  -->  P2P CallerE164 = ~p~n", [CallerDevE164_]),
+                    CallerE164 = binary_to_list(CallerDevE164_),
+
+                    Callee = rfc4627:get_field(P2PConfInfo, "callee", undefined),
+                    CalleeDevType_ = rfc4627:get_field(Callee, "devtype", undefined),
+                    lager:info("  -->  P2P CalleeType = ~p~n", [CalleeDevType_]),
+                    CalleeType = binary_to_list(CalleeDevType_),
+                    CalleeDevName_ = rfc4627:get_field(Callee, "devname", undefined),
+                    lager:info("  -->  P2P CalleeName = ~p~n", [CalleeDevName_]),
+                    CalleeName = binary_to_list(CalleeDevName_),
+                    CalleeDevE164_ = rfc4627:get_field(Callee, "deve164", undefined),
+                    lager:info("  -->  P2P CalleeE164 = ~p~n", [CalleeDevE164_]),
+                    CalleeE164 = binary_to_list(CalleeDevE164_),
+
+                    ConfStartTime_ = rfc4627:get_field(P2PConfInfo, "time", undefined),
+                    lager:info("  -->  P2P ConfStartTime = ~p~n", [ConfStartTime_]),
+                    ConfStartTime = binary_to_list(ConfStartTime_),
+
+                    ConfBitRate = rfc4627:get_field(P2PConfInfo, "bitrate", undefined),
+                    lager:info("  -->  P2P ConfBitRate = ~p~n", [ConfBitRate]),
+
+                    %% 从 redis 的 HASH 表 terminal:callerE164:baseinfo 和 terminal:calleeE164:baseinfo 中查 domain_moid
+                    case gen_server:call(RedisTask, {get_terminal_base_info_by_e164, CallerE164}, infinity) of
+                        {error, PasP2PConfCreateErr0} ->
+                            lager:warning("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
+                                [CallerE164, PasP2PConfCreateErr0]),
+                            lager:warning("[nms_task_control] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
+                                [CallerE164]),
+                            CallerDomainMoid_ = <<"match no domain">>;
+                        {ok, {_,CallerDomainMoid_,_,_}} ->
+                            lager:info("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Success! CallerDomainMoid=~p~n", 
+                                [CallerE164, CallerDomainMoid_])
+                    end,
+                    CallerDomainMoid = binary_to_list(CallerDomainMoid_),
+
+                    case gen_server:call(RedisTask, {get_terminal_base_info_by_e164, CalleeE164}, infinity) of
+                        {error, PasP2PConfCreateErr1} ->
+                            lager:warning("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
+                                [CalleeE164, PasP2PConfCreateErr1]),
+                            lager:warning("[nms_task_control] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
+                                [CalleeE164]),
+                            CalleeDomainMoid_ = <<"match no domain">>;
+                        {ok, {_,CalleeDomainMoid_,_,_}} ->
+                            lager:info("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Success! CalleeDomainMoid=~p~n", 
+                                [CalleeE164, CalleeDomainMoid_])
+                    end,
+                    CalleeDomainMoid = binary_to_list(CalleeDomainMoid_),
+
+                    %% 更新 redis 的 SET 表 domain:callerUserDomainid:p2p_meeting 和 domain:calleeUserDomainid:p2p_meeting
+                    %% 更新 redis 的 HASH 表 p2p_meeting:callerE164:info
+                    case gen_server:call(RedisTask, {add_p2p_meeting, CallerDomainMoid, CallerE164, CallerName, CallerType, 
+                            CalleeDomainMoid, CalleeE164, CalleeName, CalleeType, ConfBitRate, ConfStartTime}, infinity) of
+                        {error, PasP2PConfCreateErr2} ->
+                            lager:warning("[nms_task_control] 'MULTI'~n", []),
+                            lager:warning("[nms_task_control] 'SADD domain:~p:p2p_meeting ~p~n", [CallerDomainMoid, CallerE164]),
+                            lager:warning("[nms_task_control] 'SADD domain:~p:p2p_meeting ~p~n", [CalleeDomainMoid, CallerE164]),
+                            lager:warning("[nms_task_control] 'HMSET p2p_meeting:~p:info~n", [CallerE164]),
+                            lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [PasP2PConfCreateErr2]);
+
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'MULTI'~n", []),
+                            lager:info("[nms_task_control] 'SADD domain:~p:p2p_meeting ~p~n", [CallerDomainMoid, CallerE164]),
+                            lager:info("[nms_task_control] 'SADD domain:~p:p2p_meeting ~p~n", [CalleeDomainMoid, CallerE164]),
+                            lager:info("[nms_task_control] 'HMSET p2p_meeting:~p:info~n", [CallerE164]),
+                            lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_PAS_P2PCONF_DESTROY">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"PAS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"confinfo",
+                    %%           {obj,[{"callerE164",<<"0512111885803">>},
+                    %%                 {"calleeE164",<<"0512111885804">>}]}},
+                    %%       {"eventid",<<"EV_PAS_P2PCONF_DESTROY">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_PAS_P2PCONF_DESTROY' event!~n", []),
+
+                    P2PConfInfo = rfc4627:get_field(JsonObj, "confinfo", undefined),
+
+                    CallerE164_ = rfc4627:get_field(P2PConfInfo, "callerE164", undefined),
+                    lager:info("  -->  P2P CallerE164 = ~p~n", [CallerE164_]),
+                    CallerE164 = binary_to_list(CallerE164_),
+
+                    case gen_server:call(RedisTask, {del_p2p_meeting, CallerE164}, infinity) of
+                        {error, PasP2PConfDestroyErr0} ->
+                            lager:warning("[nms_task_control] 'MULTI'~n", []),
+                            lager:warning("[nms_task_control] 'SREM domain:CallerDomainMoid:p2p_meeting ~p~n", [CallerE164]),
+                            lager:warning("[nms_task_control] 'SREM domain:CalleeDomainMoid:p2p_meeting ~p~n", [CallerE164]),
+                            lager:warning("[nms_task_control] 'DEL p2p_meeting:~p:info~n", [CallerE164]),
+                            lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [PasP2PConfDestroyErr0]);
+
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'MULTI'~n", []),
+                            lager:info("[nms_task_control] 'SREM domain:CallerDomainMoid:p2p_meeting ~p~n", [CallerE164]),
+                            lager:info("[nms_task_control] 'SREM domain:CalleeDomainMoid:p2p_meeting ~p~n", [CallerE164]),
+                            lager:info("[nms_task_control] 'DEL p2p_meeting:~p:info~n", [CallerE164]),
+                            lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                    end,
+
+                    io:format("", []);
+
+                <<"EV_PAS_INFO">>     ->
+                    %% 消息举例
+                    %% {obj,[{"devid",<<"1111">>},
+                    %%       {"devtype",<<"PAS">>},
+                    %%       {"rpttime",<<"2014/06/16:09:57:50">>},
+                    %%       {"version",<<"1.06">>},
+                    %%       {"pidchange",0},
+                    %%       {"pasinfo",
+                    %%           {obj,[{"h323onlinecount",123},
+                    %%                 {"siponlinecount",123},
+                    %%                 {"monitoronlinecount",123},
+                    %%                 {"callingcount",123},
+                    %%                 {"maxcallcount",1234},
+                    %%                 {"confmtcount",123},
+                    %%                 {"curonlinecount",123},
+                    %%                 {"maxonlinecount",123}]}},
+                    %%       {"eventid",<<"EV_PAS_INFO">>}]}
+
+                    lager:info("[nms_task_control] get 'EV_PAS_INFO' event!~n", []),
+
+                    PASVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
+                    lager:info("  -->  PAS Version = ~p~n", [PASVersion_]),
+
+                    PidChange_ = rfc4627:get_field(JsonObj, "pidchange", undefined),
+                    lager:info("  -->  PAS PidChanged = ~p~n", [PidChange_]),
+
+                    PASInfo = rfc4627:get_field(JsonObj, "pasinfo", undefined),
+
+                    H323Online = rfc4627:get_field(PASInfo, "h323onlinecount", undefined),
+                    lager:info("  -->  H323Online = ~p~n", [H323Online]),
+
+                    SIPOnline = rfc4627:get_field(PASInfo, "siponlinecount", undefined),
+                    lager:info("  -->  SIPOnline = ~p~n", [SIPOnline]),
+
+                    MonitorOnline = rfc4627:get_field(PASInfo, "monitoronlinecount", undefined),
+                    lager:info("  -->  MonitorOnline = ~p~n", [MonitorOnline]),
+
+                    P2PCallPair = rfc4627:get_field(PASInfo, "callingcount", undefined),
+                    lager:info("  -->  P2PCallPair = ~p~n", [P2PCallPair]),
+
+                    MaxP2PCallPair = rfc4627:get_field(PASInfo, "maxcallcount", undefined),
+                    lager:info("  -->  MaxP2PCallPair = ~p~n", [MaxP2PCallPair]),
+
+                    P2PMeetingMTNum = rfc4627:get_field(PASInfo, "confmtcount", undefined),
+                    lager:info("  -->  P2PMeetingMTNum = ~p~n", [P2PMeetingMTNum]),
+
+                    PidChangeTriggered = case PidChange_ of
+                        0 -> %% 进程未异常
+                            false;
+                        1 ->
+                            true;
+                        _ ->
+                            throw(pas_pid_change_enum_error)
+                    end,
+
+        %% ------------------------------------------------------------
+                    %% 未处理失败
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                        ?L_SERVER,StatisticTime,EventID,2011), 
+
+        %% ------------------------------------------------------------
+
+                    update_redis_warning_info(PidChangeTriggered,RedisTask,DevMoid,?L_SERVER,2011), 
+
+        %% ------------------------------------------------------------
+
+                    %% 更新 redis 的 HASH 表 domain:PlatformDomainMoid:pas:pas_moid
+                    case gen_server:call(RedisTask, 
+                            {add_pas_online_statistic, PlatformDomainMoid, DevMoid, H323Online, SIPOnline, MonitorOnline}, infinity) of
+                        {error, PasInfoErr1} ->
+                            lager:warning("[nms_task_control] 'HMSET domain:~p:pas:~p' -- Failed! Error '~p'~n", 
+                                [PlatformDomainMoid, DevMoid, PasInfoErr1]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'HMSET domain:~p:pas:~p' -- Success!~n", [PlatformDomainMoid, DevMoid])
+                    end,
+
+                    %% 向 redis 的 SET 表 pas_in_all_domains 中保存 domain:PlatformDomainMoid:pas:pas_moid 字符串
+                    CompletePasDomainInfo = "domain:" ++ PlatformDomainMoid ++ ":pas:" ++ DevMoid,
+                    case gen_server:call(RedisTask, {add_pas_in_all_domains, CompletePasDomainInfo}, infinity) of
+                        {error, PasInfoErr2} ->
+                            lager:warning("[nms_task_control] 'SADD pas_in_all_domains ~p' -- Failed! Error '~p'~n", 
+                                [CompletePasDomainInfo, PasInfoErr2]);
+                        {ok, _} ->
+                            lager:info("[nms_task_control] 'SADD pas_in_all_domains ~p' -- Success!~n", [CompletePasDomainInfo])
+                    end,
+
+                    io:format("", []);
+
                 OtherEvent     ->
                     lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
             end;
@@ -1384,6 +2438,7 @@ logical_device_proc(JsonObj, RedisTask, _MySQLTask) ->
         {error,<<"Key Error">>} ->
             lager:warning("[nms_task_control] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
             throw(redis_key_error);
+
         {error, no_connection} ->
             lager:error("[nms_task_control] lost redis connection!"),
             throw(redis_connection_lost)
@@ -1442,8 +2497,6 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
 
-                    update_timer_by_collectorid(RedisTask, CollectorID),
-                    
                     %%  设置 Redis 表 terminal:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_terminal_online, DevMoid}, infinity) of
                         {error, TerDevOnlineErr0} ->
@@ -1486,8 +2539,6 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
                     CollectorID = binary_to_list(CollectorID_),
 
-                    update_timer_by_collectorid(RedisTask, CollectorID),
-                    
                     %%  删除 Redis 表 terminal:devid:online
                     case gen_server:call(RedisTask, {del_terminal_online, DevMoid}, infinity) of
                         {error, TerDevOfflineErr0} ->
@@ -1554,8 +2605,8 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%                           {"ip",<<"218.22.22.23">>}]}},
                     %%                 {"cpu_type",<<"i7">>},
                     %%                 {"cpu_freq",5},
-                    %%                 {"devname",<<"longweitest">>},
                     %%                 {"cpu_num",4},
+                    %%                 {"devname",<<"longweitest">>},
                     %%                 {"devver",<<"20141215">>},
                     %%                 {"oem",<<"dddd">>},
                     %%                 {"memory",4000},
@@ -2080,12 +3131,12 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     end,
 
                     %% 将会议音视频路数信息分别保存到如下 redis 表中
-                    %% terminal:devid:meetingdetail:privideo_send_channel
-                    %% terminal:devid:meetingdetail:privideo_recv_channel
-                    %% terminal:devid:meetingdetail:assvideo_send_channel
-                    %% terminal:devid:meetingdetail:assvideo_recv_channel
-                    %% terminal:devid:meetingdetail:audio_send_channel
-                    %% terminal:devid:meetingdetail:audio_recv_channel
+                    %% terminal:devid:meetingdetail:privideo_send_chan
+                    %% terminal:devid:meetingdetail:privideo_recv_chan
+                    %% terminal:devid:meetingdetail:assvideo_send_chan
+                    %% terminal:devid:meetingdetail:assvideo_recv_chan
+                    %% terminal:devid:meetingdetail:audio_send_chan
+                    %% terminal:devid:meetingdetail:audio_recv_chan
 
                     Fun1 = fun(ChannelInfo, Acc) ->
                         ChannelID = rfc4627:get_field(ChannelInfo, "id", undefined),
@@ -2434,7 +3485,7 @@ msg_parser(JsonObj, #state{redis_task=RedisTask, mysql_task=MySQLTask}) ->
         {logical, Type}  ->
             lager:info("Devtype => {logical, ~p}~n", [Type]),
             lager:notice("<=============== LOGICAL DEVICE ===============>"),
-            logical_device_proc(JsonObj, RedisTask, MySQLTask),
+            logical_device_proc(JsonObj, RedisTask, MySQLTask, Type),
             lager:notice("<=============== LOGICAL DEVICE ===============>"),
             io:format("", []);
         {terminal, Type} ->

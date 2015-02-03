@@ -35,7 +35,222 @@ init([Args]) ->
             {stop, {connection_error, Reason}}
     end.
 
+handle_call( {del_xmpp_in_all_domains, XmppDomainKey}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:del_xmpp_in_all_domains(RedisCon,XmppDomainKey),
+            {reply, Result, State}
+    end;
 
+handle_call( {add_xmpp_in_all_domains, XmppDomainKey}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:add_xmpp_in_all_domains(RedisCon,XmppDomainKey),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_xmpp_online_statistic, DomainMoid, OnlineNum}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:add_xmpp_online_statistic(RedisCon,DomainMoid,OnlineNum),
+            {reply, Result, State}
+    end;
+
+
+handle_call( {del_meeting_terminal, ConfE164, TerminalE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:del_meeting_terminal(RedisCon,ConfE164,TerminalE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_meeting_terminal, ConfE164, TerminalE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:add_meeting_terminal(RedisCon,ConfE164,TerminalE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_leave_meeting_info, TerminalMoid, ConfE164, TerEnterTimes, TerLeaveTime, TerLeaveReason}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:add_terminal_leave_meeting_info(RedisCon,TerminalMoid,ConfE164,TerEnterTimes,
+                TerLeaveTime,TerLeaveReason),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_terminal_enter_meeting_info, TerminalMoid, ConfE164, TerEnterTimes, TerEnterTime}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:add_terminal_enter_meeting_info(RedisCon,TerminalMoid,ConfE164,TerEnterTimes,TerEnterTime),
+            {reply, Result, State}
+    end;
+
+handle_call( {get_terminal_enter_meeting_times, TerminalMoid, ConfE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:get_terminal_enter_meeting_times(RedisCon,TerminalMoid,ConfE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {inc_terminal_enter_meeting_times, TerminalMoid, ConfE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:inc_terminal_enter_meeting_times(RedisCon,TerminalMoid,ConfE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {dec_port_meeting_terminal_num, ConfE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:dec_port_meeting_terminal_num(RedisCon,ConfE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {inc_port_meeting_terminal_num, ConfE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:inc_port_meeting_terminal_num(RedisCon,ConfE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {dec_traditional_meeting_terminal_num, ConfE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:dec_traditional_meeting_terminal_num(RedisCon,ConfE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {inc_traditional_meeting_terminal_num, ConfE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:inc_traditional_meeting_terminal_num(RedisCon,ConfE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_port_meeting, ConfE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:del_port_meeting(RedisCon,ConfE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_port_meeting, DomainMoid, MeetingID, Name, BandWidth, Terminal, Port, StartTime, StopTime}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:add_port_meeting(RedisCon,DomainMoid,MeetingID,Name,BandWidth,Terminal,Port,StartTime,StopTime),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_traditional_meeting, ConfE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:del_traditional_meeting(RedisCon,ConfE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_traditional_meeting, DomainMoid, MeetingID, Name, BandWidth, Device, StartTime, StopTime}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:add_traditional_meeting(RedisCon,DomainMoid,MeetingID,Name,BandWidth,
+                Device,StartTime,StopTime),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_p2p_meeting, CallerE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:del_p2p_meeting(RedisCon,CallerE164),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_p2p_meeting, CallerDomainMoid, CallerE164, CallerName, CallerType, 
+        CalleeDomainMoid, CalleeE164, CalleeName, CalleeType, Bandwidth, StartTime}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = meeting_handler:add_p2p_meeting(RedisCon,CallerDomainMoid,CallerE164,CallerName,CallerType,
+                CalleeDomainMoid,CalleeE164,CalleeName,CalleeType,Bandwidth,StartTime),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_pas_in_all_domains, CompletePasDomainInfo}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:del_pas_in_all_domains(RedisCon,CompletePasDomainInfo),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_pas_in_all_domains, CompletePasDomainInfo}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:add_pas_in_all_domains(RedisCon,CompletePasDomainInfo),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_pas_online_statistic, DomainMoid, DevMoid, H323Online, SIPOnline, MonitorOnline}, 
+        _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:add_pas_online_statistic(RedisCon,DomainMoid,DevMoid,H323Online,SIPOnline,MonitorOnline),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_pas_moid, DomainMoid, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:add_pas_moid(RedisCon,DomainMoid,DevMoid),
+            {reply, Result, State}
+    end;
 
 handle_call( {add_physical_ip, DevMoid, PhySerIPString}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
@@ -45,7 +260,6 @@ handle_call( {add_physical_ip, DevMoid, PhySerIPString}, _From, #state{redis_con
             Result = physical_server_handler:add_physical_ip(RedisCon,DevMoid,PhySerIPString),
             {reply, Result, State}
     end;
-
 
 handle_call( {add_terminal_channel_detail, DevMoid, ChannelType, ChanID, InfoList}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
@@ -62,6 +276,24 @@ handle_call( {add_terminal_meeting_channel, DevMoid, ChannelType, ChanList}, _Fr
             {reply, {error, no_connection}, State};
         _ ->
             Result = terminal_handler:add_terminal_meeting_channel(RedisCon,DevMoid,ChannelType,ChanList),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_terminal_meeting_channels, TerminalMoid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:del_terminal_meeting_channels(RedisCon,TerminalMoid),
+            {reply, Result, State}
+    end;
+
+handle_call( {del_terminal_meeting_detail, DevMoid}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:del_terminal_meeting_detail(RedisCon,DevMoid),
             {reply, Result, State}
     end;
 
@@ -246,6 +478,15 @@ handle_call( {get_terminal_base_info, DevMoid}, _From, #state{redis_con=RedisCon
             {reply, Result, State}
     end;
 
+handle_call( {get_terminal_base_info_by_e164, DevE164}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = terminal_handler:get_terminal_base_info_by_e164(RedisCon,DevE164),
+            {reply, Result, State}
+    end;
+
 handle_call( {get_logic_server_info_by_guid, DevGuid}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
@@ -396,6 +637,25 @@ handle_call( {add_physical_server_online, DevGuid}, _From, #state{redis_con=Redi
             {reply, {error, no_connection}, State};
         _ ->
             Result = physical_server_handler:add_physical_server_online(RedisCon,DevGuid),
+            {reply, Result, State}
+    end;
+
+
+handle_call( {del_logical_server_warning, DevGuid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:del_logical_server_warning(RedisCon,DevGuid,WarningCode),
+            {reply, Result, State}
+    end;
+
+handle_call( {add_logical_server_warning, DevGuid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
+    case RedisCon of 
+        undefined ->
+            {reply, {error, no_connection}, State};
+        _ ->
+            Result = logical_server_handler:add_logical_server_warning(RedisCon,DevGuid,WarningCode),
             {reply, Result, State}
     end;
 
