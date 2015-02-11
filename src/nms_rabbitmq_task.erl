@@ -1,15 +1,30 @@
+%% Copyright (c) 2014-2015, Moooofly <http://my.oschina.net/moooofly/blog>
+%%
+%% Permission to use, copy, modify, and/or distribute this software for any
+%% purpose with or without fee is hereby granted, provided that the above
+%% copyright notice and this permission notice appear in all copies.
+%%
+%% THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+%% WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+%% MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+%% ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+%% WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+%% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 -module(nms_rabbitmq_task).
-
 -include_lib("amqp_client/include/amqp_client.hrl").
-
 -behaviour(gen_server).
 
--export([start_link/1, stop/1]).
-
--export([do_consume/3]).
-
--export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
+-export([init/1, 
+         terminate/2, 
+         code_change/3, 
+         handle_call/3, 
+         handle_cast/2,
          handle_info/2]).
+
+-export([start_link/1, stop/1]).
+-export([do_consume/5]).
 
 -record(state, {
         rabbit_con   = undefined,
@@ -25,7 +40,7 @@
 start_link(Args) when is_list(Args) ->
     gen_server:start_link(?MODULE, [Args], []);
 start_link(_) ->
-    io:format("Args must be list!Error!"),
+    lager:error("[RabbitmqTask] Args must be list! Error!"),
     {error, args_not_list}.
 
 stop(TaskPid) ->
@@ -33,8 +48,8 @@ stop(TaskPid) ->
 
 %% TaskPid -> nms_rabbitmq_task 进程 pid
 %% TaskConPid -> nms_task_control 进程 pid
-do_consume(TaskPid, TaskConPid, QueueN) ->
-    gen_server:call(TaskPid, {do_consume, TaskConPid, QueueN}, infinity).
+do_consume(TaskPid, TaskConPid, QueueN, ExchangeN, RoutingKey) ->
+    gen_server:call(TaskPid, {do_consume, TaskConPid, QueueN, ExchangeN, RoutingKey}, infinity).
 
 
 %%--------------------------------------------------------------------------
@@ -43,7 +58,14 @@ do_consume(TaskPid, TaskConPid, QueueN) ->
 
 setup_queue(Channel, QueueN) ->
     #'queue.declare_ok'{} = 
-        amqp_channel:call(Channel, #'queue.declare'{queue = nms_api:to_binary(QueueN)}).
+        amqp_channel:call(Channel, #'queue.declare'{queue = nms_api:to_binary(QueueN), durable = true}).
+
+setup_bind(Channel, QueueN, ExchangeN, RoutingKey) ->
+    #'queue.bind_ok'{} = 
+        amqp_channel:call(Channel, #'queue.bind'{
+            queue=nms_api:to_binary(QueueN), 
+            exchange=nms_api:to_binary(ExchangeN), 
+            routing_key=nms_api:to_binary(RoutingKey)}).
 
 setup_consumer(Channel, QueueN) ->
     #'basic.consume_ok'{} =        
@@ -65,25 +87,27 @@ init([Args]) ->
                 },
     case amqp_connection:start(Params) of 
         {ok, Connection} ->
-            io:format("[nms_rabbitmq_task] RabbitqCon Pid = ~p~n", [Connection]),
-            case amqp_connection:open_channel(
-                Connection, {amqp_direct_consumer, [self()]}) of
+            lager:info("[RabbitmqTask] Connection Pid = ~p~n", [Connection]),
+            case amqp_connection:open_channel(Connection, {amqp_direct_consumer, [self()]}) of
                 {ok, Channel} ->
-                    io:format("[nms_rabbitmq_task] Channel = ~p~n", [Channel]),
+                    lager:info("[RabbitmqTask] Channel Pid = ~p~n", [Channel]),
                     {ok, #state{rabbit_con=Connection, rabbit_chan=Channel}};
-                {error, Error} ->
-                    io:format("[nms_rabbitmq_task] channel_error Reason = ~p~n", [Error]),
-                    {stop, {channel_error, Error}}
+                {error, ChanErr} ->
+                    lager:info("[RabbitmqTask] Channel Setup Failed! Error '~p'~n", [ChanErr]),
+                    {stop, {channel_error, ChanErr}}
             end;        
-        {error, Error} ->
-            io:format("[nms_rabbitmq_task] connection_error Reason = ~p~n", [Error]),
-            {stop, {connection_error, Error}}
+        {error, ConnErr} ->
+            lager:info("[RabbitmqTask] Connection Setup Failed! Error '~p'~n", [ConnErr]),
+            {stop, {connection_error, ConnErr}}
     end.
 
-handle_call({do_consume, TaskCon, QueueN}, _From, #state{rabbit_chan=Channel}=State) ->
+handle_call({do_consume, TaskCon, QueueN, ExchangeN, RoutingKey}, 
+        _From, #state{rabbit_chan=Channel}=State) ->
     setup_queue(Channel, QueueN),
+    setup_bind(Channel, QueueN, ExchangeN, RoutingKey),
     setup_consumer(Channel, QueueN),
-    io:format("[nms_rabbitmq_task] Consumer Setup!~n"),
+
+    lager:notice("[RabbitmqTask] Consumer Setup Success!"),
     {reply, ok, State#state{task_control=TaskCon}};
 
 handle_call(stop, _From, State) ->
@@ -103,7 +127,7 @@ handle_info(#'basic.consume_ok'{}, State) ->
     {noreply, State};
 
 handle_info(#'basic.cancel'{}, State) ->
-    io:format("[nms_rabbitmq_task] Recv #'basic.cancel'{}, need do something ~n", []),
+    lager:info("[RabbitmqTask] Recv #'basic.cancel'{}, need do something ~n", []),
     {noreply, State};
 
 handle_info(#'basic.cancel_ok'{}, State) ->

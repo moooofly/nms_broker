@@ -1,3 +1,17 @@
+%% Copyright (c) 2014-2015, Moooofly <http://my.oschina.net/moooofly/blog>
+%%
+%% Permission to use, copy, modify, and/or distribute this software for any
+%% purpose with or without fee is hereby granted, provided that the above
+%% copyright notice and this permission notice appear in all copies.
+%%
+%% THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+%% WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+%% MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+%% ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+%% WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+%% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 -module(nms_task_control).
 
 -include_lib("amqp_client/include/amqp_client.hrl").
@@ -6,7 +20,7 @@
 
 -export([start_link/4]).
 
--export([do_consume/2]).
+-export([do_consume/4]).
 
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
          handle_info/2]).
@@ -19,10 +33,10 @@
 	}).
 
 
--define(CPU_THRESHOLD_DEFAULT, 80).
--define(MEM_THRESHOLD_DEFAULT, 80).
--define(DISK_THRESHOLD_DEFAULT, 80).
--define(NET_THRESHOLD_DEFAULT, 60 * 1024 * 1024).  %% 需要和孙涛确认上报信息的单位
+-define(CPU_THRESHOLD_DEFAULT,  <<"80">>).
+-define(MEM_THRESHOLD_DEFAULT,  <<"80">>).
+-define(DISK_THRESHOLD_DEFAULT, <<"80">>).
+-define(NET_THRESHOLD_DEFAULT,  <<"60 * 1024 * 1024">>).  %% 需要确认单位
 
 -define(PAS_THRESHOLD_DEFAULT, 5000).   %% 接入数量
 -define(MTS_THRESHOLD_DEFAULT, 400).    %% 呼叫对数量
@@ -54,11 +68,8 @@ start_link(TRef, MQTask, RedisTask, MySQLTask) ->
     gen_server:start_link(?MODULE, [TRef, MQTask, RedisTask, MySQLTask], []).
 
 
-do_consume(TaskConPid, QueueN) when is_binary(QueueN) andalso QueueN =/= <<>> ->
-    gen_server:call(TaskConPid, {do_consume, QueueN}, infinity);
-do_consume(TaskConPid, _) ->
-    gen_server:call(TaskConPid, {do_consume, <<"hello">>}, infinity).
-
+do_consume(TaskConPid, QueueN, ExchangeN, RoutingKey) ->
+    gen_server:call(TaskConPid, {do_consume, QueueN, ExchangeN, RoutingKey}, infinity).
 
 %%--------------------------------------------------------------------------
 %% Plumbing
@@ -285,7 +296,7 @@ to_description(Code) when is_integer(Code) ->
     end,
     Desc;
 to_description(_) ->
-    lager:warning("[nms_task_control] Code must be of interger type!").
+    lager:warning("[TaskControl] Code must be of interger type!").
 
 channelid_to_warningcode(VideoSrcChannelID) ->
     WarningCode = case VideoSrcChannelID of
@@ -316,7 +327,7 @@ update_mysql_warning_info(WarningTriggered,MySQLTask,DevMoid,DomainMoid,DevType,
     [_Id,_Type,_Code,_Name,Level,Description,_Suggestion] = 
         gen_server:call(MySQLTask, {get_warning_code_detail, WarningCode}, infinity),
 
-    lager:info("[nms_task_control] 'SELECT * FROM warning_code WHERE code=~p' -- Success!~n", [WarningCode]),
+    lager:info("[TaskControl] 'SELECT * FROM warning_code WHERE code=~p' -- Success!~n", [WarningCode]),
 
     %%io:format("~n~s~n", [string:chars($-,36)]),
     %%io:format("warning code[~p] detail:~n", [WarningCode]),
@@ -335,25 +346,25 @@ update_mysql_warning_info(WarningTriggered,MySQLTask,DevMoid,DomainMoid,DevType,
     %% 判定当前上报信息是否触发告警
     case WarningTriggered of
         true -> %% 触发告警            
-            lager:notice("[nms_task_control] recv ~p and trigger ~p~n", [EventID,CodeDesc]),
+            lager:notice("[TaskControl] recv ~p and trigger ~p~n", [EventID,CodeDesc]),
 
             case WarningItem of
                 {exist, _} ->
                     %% 若 warning_unrepaired 表中已经存在对应条目，则不用对该表做变更
-                    lager:info("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
+                    lager:info("[TaskControl] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
                         warning ALREADY exists, nothing need to do.");
                 {non_exist, _} ->
                     %% 若 warning_unrepaired 表中不存在对应条目，则需要插入一条新数据
-                    lager:info("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
+                    lager:info("[TaskControl] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
                         warning NOT exists, need to insert."),
                     
                     %% 向 warning_unrepaired 中插入一条新数据
                     case gen_server:call(MySQLTask, {add_unrepaired_warning, DevMoid, DevType, DomainMoid, 
                                 WarningCode, binary_to_list(Level), binary_to_list(Description), StatisticTime}, infinity) of
                         {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO warning_unrepaired' -- Success!");
+                            lager:info("[TaskControl] 'INSERT INTO warning_unrepaired' -- Success!");
                         {error, Err1} ->
-                            lager:warning("[nms_task_control] 'INSERT INTO warning_unrepaired' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'INSERT INTO warning_unrepaired' -- Failed! Error '~p'~n", 
                                 [Err1])
                     end,
 
@@ -361,33 +372,33 @@ update_mysql_warning_info(WarningTriggered,MySQLTask,DevMoid,DomainMoid,DevType,
                     case gen_server:call(MySQLTask, {add_warning_repair_statistic, DomainMoid, 
                                 DevMoid, WarningCode, ?WARN_ON, StatisticTime}, infinity) of
                          {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO warning_repair_statistic' Success! WARN_ON!");
+                            lager:info("[TaskControl] 'INSERT INTO warning_repair_statistic' Success! WARN_ON!");
                          {error, Err2} ->
-                            lager:warning("[nms_task_control] 'INSERT INTO warning_repair_statistic' Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'INSERT INTO warning_repair_statistic' Failed! Error '~p'~n", 
                                 [Err2])
                     end,
 
                     io:format("", []);
 
                 pool_init_failed ->
-                    lager:warning("[nms_task_control] Something wrong happended, get 'pool_init_failed'!!")
+                    lager:warning("[TaskControl] Something wrong happended, get 'pool_init_failed'!!")
             end,
 
             io:format("", []);
         false -> %% 未触发告警
-            lager:notice("[nms_task_control] recv ~p but not trigger ~p~n", [EventID, CodeDesc]),
+            lager:notice("[TaskControl] recv ~p but not trigger ~p~n", [EventID, CodeDesc]),
 
             case WarningItem of
                 {exist, [_,_,_,_,_,_,_,{datetime,{{Year,Month,Day},{Hour,Min,Sec}}},_]=UnRepairedWarning} ->
                     %% 若 warning_unrepaired 表中已经存在对应条目，则读出该条目信息
                     %% 因为变化的信息仅为 resolve_time ，故其他信息可以直接使用上报内容                                    
                     
-                    lager:info("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
+                    lager:info("[TaskControl] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
                         warning ALREADY exists, need to delete!"),
-                    lager:debug("[nms_task_control] UnRepairedWarning =~n~p~n", [UnRepairedWarning]),
+                    lager:debug("[TaskControl] UnRepairedWarning =~n~p~n", [UnRepairedWarning]),
 
                     %% 构造起始时间 e.g. 2014-10-29 12:26:12
-                    lager:debug("[nms_task_control] {Year,Month,Day},{Hour,Min,Sec} = {~p,~p,~p},{~p,~p,~p}~n", 
+                    lager:debug("[TaskControl] {Year,Month,Day},{Hour,Min,Sec} = {~p,~p,~p},{~p,~p,~p}~n", 
                         [Year,Month,Day,Hour,Min,Sec]),                                    
                     StartTime = integer_to_list(Year)++"-"++integer_to_list(Month)++"-"++integer_to_list(Day)++" "++
                                 integer_to_list(Hour)++"-"++integer_to_list(Min)++"-"++integer_to_list(Sec),
@@ -398,9 +409,9 @@ update_mysql_warning_info(WarningTriggered,MySQLTask,DevMoid,DomainMoid,DevType,
                                 WarningCode, binary_to_list(Level), binary_to_list(Description), StartTime, 
                                 StatisticTime}, infinity) of
                          {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO warning_repaired' -- Success!");
+                            lager:info("[TaskControl] 'INSERT INTO warning_repaired' -- Success!");
                          {error, Err4} ->
-                            lager:warning("[nms_task_control] 'INSERT INTO warning_repaired' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'INSERT INTO warning_repaired' -- Failed! Error '~p'~n", 
                                 [Err4])
                     end,
 
@@ -408,9 +419,9 @@ update_mysql_warning_info(WarningTriggered,MySQLTask,DevMoid,DomainMoid,DevType,
                     case gen_server:call(MySQLTask, {del_unrepaired_warning, DevMoid, DomainMoid, 
                                 WarningCode}, infinity) of
                          {ok, success} ->
-                            lager:info("[nms_task_control] 'DELETE FROM warning_unrepaired' -- Success!");
+                            lager:info("[TaskControl] 'DELETE FROM warning_unrepaired' -- Success!");
                          {error, Err5} ->
-                            lager:warning("[nms_task_control] 'DELETE FROM warning_unrepaired' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DELETE FROM warning_unrepaired' -- Failed! Error '~p'~n", 
                                 [Err5])
                     end,
 
@@ -418,19 +429,19 @@ update_mysql_warning_info(WarningTriggered,MySQLTask,DevMoid,DomainMoid,DevType,
                     case gen_server:call(MySQLTask, {add_warning_repair_statistic, DomainMoid, DevMoid, 
                                 WarningCode, ?WARN_OFF, StatisticTime}, infinity) of
                          {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO warning_repair_statistic' Success! WARN_OFF!");
+                            lager:info("[TaskControl] 'INSERT INTO warning_repair_statistic' Success! WARN_OFF!");
                          {error, Err6} ->
-                            lager:warning("[nms_task_control] 'INSERT INTO warning_repair_statistic' Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'INSERT INTO warning_repair_statistic' Failed! Error '~p'~n", 
                                 [Err6])
                     end,
 
                     io:format("", []);
                {non_exist, _} ->
                     %% 若 warning_unrepaired 表中不存在对应条目，则不用对该表做变更
-                    lager:info("[nms_task_control] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
+                    lager:info("[TaskControl] 'SELECT * FROM warning_unrepaired WHERE xx' -- Success! 
                         warning NOT exists, nothing need to do.");
                 pool_init_failed ->
-                    lager:warning("[nms_task_control] Something wrong happended, get 'pool_init_failed'!!")
+                    lager:warning("[TaskControl] Something wrong happended, get 'pool_init_failed'!!")
             end,
 
             io:format("", [])
@@ -477,13 +488,13 @@ update_redis_warning_info(WarningTriggered,RedisTask,DevMoid,DevType,WarningCode
 
     case gen_server:call(RedisTask, {Handler, DevMoid, WarningCode}, infinity) of
         {ok, <<"0">>} ->
-            lager:info("[nms_task_control] '~p ~p:~p:warning ~p' -- Success! 
+            lager:info("[TaskControl] '~p ~p:~p:warning ~p' -- Success! 
                 but WarningCode.~p ~p exist!~n", [Action,Tag,DevMoid,WarningCode,WarningCode,Desc]);
         {ok, _} ->
-            lager:info("[nms_task_control] '~p ~p:~p:warning ~p' -- Success!~n", 
+            lager:info("[TaskControl] '~p ~p:~p:warning ~p' -- Success!~n", 
                 [Action, Tag, DevMoid, WarningCode]);  
         {error, Err} ->
-            lager:warning("[nms_task_control] '~p ~p:~p:warning xx' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] '~p ~p:~p:warning xx' -- Failed! Error '~p'~n", 
                 [DevMoid, Tag, Err])
     end,
 
@@ -491,74 +502,74 @@ update_redis_warning_info(WarningTriggered,RedisTask,DevMoid,DevType,WarningCode
 
 
 sadd_chan_index(RedisTask, DevMoid, privideo_send_chan, PriVideoSendChanList) ->
-    lager:info("[nms_task_control] PriVideoSend Channel = ~p~n", [PriVideoSendChanList]),
+    lager:info("[TaskControl] PriVideoSend Channel = ~p~n", [PriVideoSendChanList]),
     case gen_server:call(RedisTask, 
             {add_terminal_meeting_channel, DevMoid, privideo_send_chan, PriVideoSendChanList}, infinity) of
         {error, ChanErr} ->
-            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:privideo_send_chan' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'SADD terminal:~p:meetingdetail:privideo_send_chan' -- Failed! Error '~p'~n", 
                 [DevMoid, ChanErr]);
         _ ->
-            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:privideo_send_chan' -- Success!~n", 
+            lager:info("[TaskControl] 'SADD terminal:~p:meetingdetail:privideo_send_chan' -- Success!~n", 
                 [DevMoid])
     end;
 
 sadd_chan_index(RedisTask, DevMoid, privideo_recv_chan, PriVideoRecvChanList) ->
-    lager:info("[nms_task_control] PriVideoRecv Channel = ~p~n", [PriVideoRecvChanList]),
+    lager:info("[TaskControl] PriVideoRecv Channel = ~p~n", [PriVideoRecvChanList]),
     case gen_server:call(RedisTask, 
             {add_terminal_meeting_channel, DevMoid, privideo_recv_chan, PriVideoRecvChanList}, infinity) of
         {error, ChanErr} ->
-            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:privideo_recv_chan' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'SADD terminal:~p:meetingdetail:privideo_recv_chan' -- Failed! Error '~p'~n", 
                 [DevMoid, ChanErr]);
         _ ->
-            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:privideo_recv_chan' -- Success!~n", 
+            lager:info("[TaskControl] 'SADD terminal:~p:meetingdetail:privideo_recv_chan' -- Success!~n", 
                 [DevMoid])
     end;
 
 sadd_chan_index(RedisTask, DevMoid, assvideo_send_chan, AssVideoSendChanList) ->
-    lager:info("[nms_task_control] AssVideoSend Channel = ~p~n", [AssVideoSendChanList]),
+    lager:info("[TaskControl] AssVideoSend Channel = ~p~n", [AssVideoSendChanList]),
     case gen_server:call(RedisTask, 
             {add_terminal_meeting_channel, DevMoid, assvideo_send_chan, AssVideoSendChanList}, infinity) of
         {error, ChanErr} ->
-            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:assvideo_send_chan' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'SADD terminal:~p:meetingdetail:assvideo_send_chan' -- Failed! Error '~p'~n", 
                 [DevMoid, ChanErr]);
         _ ->
-            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:assvideo_send_chan' -- Success!~n", 
+            lager:info("[TaskControl] 'SADD terminal:~p:meetingdetail:assvideo_send_chan' -- Success!~n", 
                 [DevMoid])
     end;
 
 sadd_chan_index(RedisTask, DevMoid, assvideo_recv_chan, AssVideoRecvChanList) ->
-    lager:info("[nms_task_control] AssVideoRecv Channel = ~p~n", [AssVideoRecvChanList]),
+    lager:info("[TaskControl] AssVideoRecv Channel = ~p~n", [AssVideoRecvChanList]),
     case gen_server:call(RedisTask, 
             {add_terminal_meeting_channel, DevMoid, assvideo_recv_chan, AssVideoRecvChanList}, infinity) of
         {error, ChanErr} ->
-            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:assvideo_recv_chan' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'SADD terminal:~p:meetingdetail:assvideo_recv_chan' -- Failed! Error '~p'~n", 
                 [DevMoid, ChanErr]);
         _ ->
-            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:assvideo_recv_chan' -- Success!~n", 
+            lager:info("[TaskControl] 'SADD terminal:~p:meetingdetail:assvideo_recv_chan' -- Success!~n", 
                 [DevMoid])
     end;
 
 sadd_chan_index(RedisTask, DevMoid, audio_send_chan, AudioSendChanList) ->
-    lager:info("[nms_task_control] AudioSend Channel = ~p~n", [AudioSendChanList]),
+    lager:info("[TaskControl] AudioSend Channel = ~p~n", [AudioSendChanList]),
     case gen_server:call(RedisTask, 
             {add_terminal_meeting_channel, DevMoid, audio_send_chan, AudioSendChanList}, infinity) of
         {error, ChanErr} ->
-            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:audio_send_chan' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'SADD terminal:~p:meetingdetail:audio_send_chan' -- Failed! Error '~p'~n", 
                 [DevMoid, ChanErr]);
         _ ->
-            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:audio_send_chan' -- Success!~n", 
+            lager:info("[TaskControl] 'SADD terminal:~p:meetingdetail:audio_send_chan' -- Success!~n", 
                 [DevMoid])
     end;
 
 sadd_chan_index(RedisTask, DevMoid, audio_recv_chan, AudioRecvChanList) ->
-    lager:info("[nms_task_control] AudioRecv Channel = ~p~n", [AudioRecvChanList]),
+    lager:info("[TaskControl] AudioRecv Channel = ~p~n", [AudioRecvChanList]),
     case gen_server:call(RedisTask, 
             {add_terminal_meeting_channel, DevMoid, audio_recv_chan, AudioRecvChanList}, infinity) of
         {error, ChanErr} ->
-            lager:warning("[nms_task_control] 'SADD terminal:~p:meetingdetail:audio_recv_chan' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'SADD terminal:~p:meetingdetail:audio_recv_chan' -- Failed! Error '~p'~n", 
                 [DevMoid, ChanErr]);
         _ ->
-            lager:info("[nms_task_control] 'SADD terminal:~p:meetingdetail:audio_recv_chan' -- Success!~n", 
+            lager:info("[TaskControl] 'SADD terminal:~p:meetingdetail:audio_recv_chan' -- Success!~n", 
                 [DevMoid])
     end.
 
@@ -580,7 +591,7 @@ audio_format_trans(Format) when is_integer(Format) ->
         _ -> throw(out_of_audio_format_range)
     end;
 audio_format_trans(_) ->
-    lager:error("[nms_task_control] audio Format is not integer type!"),
+    lager:error("[TaskControl] audio Format is not integer type!"),
     throw(format_is_wrong_type).
 
 video_format_trans(Format) when is_integer(Format) ->
@@ -595,7 +606,7 @@ video_format_trans(Format) when is_integer(Format) ->
         _ -> throw(out_of_video_format_range)
     end;
 video_format_trans(_) ->
-    lager:error("[nms_task_control] video Format is not integer type!"),
+    lager:error("[TaskControl] video Format is not integer type!"),
     throw(format_is_wrong_type).
 
 
@@ -615,15 +626,15 @@ update_timer_by_collectorid(RedisTask, CollectorID) ->
     %% 根据 collectorid 从 Redis 表 collector:collectorid:timer 中获取之前使用的定时器 TimerRef
     case gen_server:call(RedisTask, {get_heartbeat_timer_by_collectorid, CollectorID}, infinity) of
         {error, CollectorHBErr1} ->
-            lager:warning("[nms_task_control] 'HGET collector:~p:timer heartbeat' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'HGET collector:~p:timer heartbeat' -- Failed! Error '~p'~n", 
                 [CollectorID, CollectorHBErr1]),
             OldTimerRef_ = undefined;
         {ok, undefined} ->
-            lager:info("[nms_task_control] 'HGET collector:~p:timer heartbeat' -- Success! HBTimerRef=undefined~n", 
+            lager:info("[TaskControl] 'HGET collector:~p:timer heartbeat' -- Success! HBTimerRef=undefined~n", 
                 [CollectorID]),
             OldTimerRef_ = undefined;
         {ok, OldTimerRef_} ->
-            lager:info("[nms_task_control] 'HGET collector:~p:timer heartbeat' -- Success! HBTimerRef=~p~n", 
+            lager:info("[TaskControl] 'HGET collector:~p:timer heartbeat' -- Success! HBTimerRef=~p~n", 
                 [CollectorID, binary_to_term(OldTimerRef_)])
     end,
 
@@ -635,12 +646,12 @@ update_timer_by_collectorid(RedisTask, CollectorID) ->
             %% 删除之前的定时器
             case cancel_timer(OldTimerRef) of
                 false ->  %% 对应定时器已被删除的情况
-                    lager:notice("[nms_task_control] Trying to cancel a non-exist timer! ~p~n", [OldTimerRef]);
+                    lager:notice("[TaskControl] Trying to cancel a non-exist timer! ~p~n", [OldTimerRef]);
                 0     ->  %% 对应定时器已超时情况
-                    lager:notice("[nms_task_control] Timer is ALREADY Triggered! ~p~n", [OldTimerRef]);
+                    lager:notice("[TaskControl] Timer is ALREADY Triggered! ~p~n", [OldTimerRef]);
                     %% 从 redis 表中删除 collector 相关信息
                 _     ->  %% 对应定时器未超时情况
-                    lager:notice("[nms_task_control] Timer is STILL Active! ~p~n", [OldTimerRef])                            
+                    lager:notice("[TaskControl] Timer is STILL Active! ~p~n", [OldTimerRef])                            
             end
     end,
 
@@ -652,10 +663,10 @@ update_timer_by_collectorid(RedisTask, CollectorID) ->
     %% 根据 collectorid 向 Redis 表 collector:collectorid:timer 中保存新的定时器 TimerRef
     case gen_server:call(RedisTask, {set_heartbeat_timer_by_collectorid, CollectorID, NewTimerRefList}, infinity) of
         {error, CollectorHBErr2} ->
-            lager:warning("[nms_task_control] 'HSET collector:~p:timer heartbeat' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'HSET collector:~p:timer heartbeat' -- Failed! Error '~p'~n", 
                 [CollectorID, CollectorHBErr2]);
         {ok, _} ->
-            lager:info("[nms_task_control] 'HSET collector:~p:timer heartbeat ~p' -- Success! ~n", 
+            lager:info("[TaskControl] 'HSET collector:~p:timer heartbeat ~p' -- Success! ~n", 
                 [CollectorID, NewTimerRef])
     end.
 
@@ -675,7 +686,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
             {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
             StatisticTime = integer_to_list(Year)++"/"++integer_to_list(Month)++"/"++integer_to_list(Day)++":"++
                             integer_to_list(Hour)++":"++integer_to_list(Min)++":"++integer_to_list(Sec),
-            lager:info("[nms_task_control] find no rpttime, so make it myself:~p~n", 
+            lager:info("[TaskControl] find no rpttime, so make it myself:~p~n", 
                 [StatisticTime]);
         _ ->
             StatisticTime = binary_to_list(StatisticTime_)
@@ -712,7 +723,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %%            {obj,[{"ip",<<"172.16.110.1">>}]}]},
                     %%       {"eventid",<<"EV_SERVER_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_SERVER_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_SERVER_INFO' event!~n", []),
 
                     ServerInfo = rfc4627:get_field(JsonObj, "serverinfo", undefined),
 
@@ -724,10 +735,10 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %% 向 redis 表 p_server:devid:info 中插入上面得到的 IP 地址字符串
                     case gen_server:call(RedisTask, {add_physical_ip, DevMoid, PhySerIPString}, infinity) of
                         {error, PhySrvInfoErr0} ->
-                            lager:warning("[nms_task_control] 'HSET p_server:~p:info ip xx' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HSET p_server:~p:info ip xx' -- Failed! Error '~p'~n", 
                                 [DevMoid, PhySrvInfoErr0]);
                         _ ->
-                            lager:info("[nms_task_control] 'HSET p_server:~p:info ip ~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'HSET p_server:~p:info ip ~p' -- Success!~n", 
                                 [DevMoid, PhySerIPString])
                     end,
                     io:format("", []);
@@ -740,7 +751,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %%       {"eventid",<<"EV_SYSTIME_SYNC">>},
                     %%       {"syncstate",1}]}
 
-                    lager:info("[nms_task_control] get 'EV_SYSTIME_SYNC' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_SYSTIME_SYNC' event!~n", []),
 
                     Sync_ = rfc4627:get_field(JsonObj, "syncstate", undefined),
                     lager:info("  -->  Sync = ~p~n", [Sync_]),
@@ -773,7 +784,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %%       {"devtype",<<"SERVICE_SRV_PHY">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_DEV_ONLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
@@ -782,28 +793,28 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %%  设置 Redis 表 p_server:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_physical_server_online, DevMoid}, infinity) of
                         {error, PhyDevOnlineErr0} ->
-                            lager:warning("[nms_task_control] 'SET p_server:~p:online online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SET p_server:~p:online online' -- Failed! Error '~p'~n", 
                                 [DevMoid, PhyDevOnlineErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SET p_server:~p:online online' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'SET p_server:~p:online online' -- Success!~n", [DevMoid])
                     end,
 
                     %% 向 Redis 表 collector 中保存 collectorid
                     case gen_server:call(RedisTask, {add_collectorid, CollectorID}, infinity) of
                         {error, PhyDevOnlineErr1} ->
-                            lager:warning("[nms_task_control] 'SADD collector ~p' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD collector ~p' -- Failed! Error '~p'~n", 
                                 [CollectorID, PhyDevOnlineErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD collector ~p' -- Success!~n", [CollectorID])
+                            lager:info("[TaskControl] 'SADD collector ~p' -- Success!~n", [CollectorID])
                     end,
 
                     %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
                     case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
                         {error, PhyDevOnlineErr2} ->
-                            lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, PhyDevOnlineErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevGuid])
                     end,
                     io:format("", []);
@@ -815,7 +826,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %%       {"devtype",<<"SERVICE_SRV_PHY">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_DEV_OFFLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
@@ -824,37 +835,37 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %%  删除 Redis 表 p_server:devid:online
                     case gen_server:call(RedisTask, {del_physical_server_online, DevMoid}, infinity) of
                         {error, PhyDevOfflineErr0} ->
-                            lager:warning("[nms_task_control] 'DEL p_server:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL p_server:~p:online' -- Failed! Error '~p'~n", 
                                 [DevMoid, PhyDevOfflineErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL p_server:~p:online' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL p_server:~p:online' -- Success!~n", [DevMoid])
                     end,
 
                     %%  删除 Redis 表 p_server:devid:resource
                     case gen_server:call(RedisTask, {del_physical_server_resource, DevMoid}, infinity) of
                         {error, PhyDevOfflineErr1} ->
-                            lager:warning("[nms_task_control] 'DEL p_server:~p:resource' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL p_server:~p:resource' -- Failed! Error '~p'~n", 
                                 [DevMoid, PhyDevOfflineErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL p_server:~p:resource' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL p_server:~p:resource' -- Success!~n", [DevMoid])
                     end,
 
                     %%  删除 Redis 表 p_server:devid:warning
                     case gen_server:call(RedisTask, {del_physical_server_warning_all, DevMoid}, infinity) of
                         {error, PhyDevOfflineErr2} ->
-                            lager:warning("[nms_task_control] 'DEL p_server:~p:warning' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL p_server:~p:warning' -- Failed! Error '~p'~n", 
                                 [DevMoid, PhyDevOfflineErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL p_server:~p:warning' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL p_server:~p:warning' -- Success!~n", [DevMoid])
                     end,
 
                     %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
                     case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
                         {error, PhyDevOnlineErr3} ->
-                            lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, PhyDevOnlineErr3]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevGuid])
                     end,
                     io:format("", []);
@@ -887,9 +898,9 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %%    case gen_server:call(MySQLTask, {add_cpu_statistic, DomainMoid, DevMoid, list_to_integer(N), Cpu, 
                     %%            StatisticTime}, infinity) of
                     %%        {ok, success} ->
-                    %%            lager:info("[nms_task_control] 'INSERT INTO cpu_statistic' -- Success! Index:~p~n", [N]);
+                    %%            lager:info("[TaskControl] 'INSERT INTO cpu_statistic' -- Success! Index:~p~n", [N]);
                     %%        {error, CpuErr0} -> %% 重复使用可能会报错
-                    %%            io:format("[nms_task_control] 'INSERT INTO cpu_statistic' -- Failed! Error '~p'~n", [CpuErr0])
+                    %%            io:format("[TaskControl] 'INSERT INTO cpu_statistic' -- Failed! Error '~p'~n", [CpuErr0])
                     %%    end
                     %%end || {obj, [{"cpucore"++N, Cpu}]} <- CoreInfo],
 
@@ -902,19 +913,19 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %% 查询保存服务器 CPU 阈值信息的表 resource_limit
                     Cpu_Threshold = case gen_server:call(RedisTask, {get_server_cpu_limit}, infinity) of
                         {error, CpuErr1} ->
-                            lager:warning("[nms_task_control] 'GET server_cpu_limit' -- Failed! Error '~p'~n", [CpuErr1]),
+                            lager:warning("[TaskControl] 'GET server_cpu_limit' -- Failed! Error '~p'~n", [CpuErr1]),
                             case gen_server:call(MySQLTask, {get_server_cpu_limit}, infinity) of
                                 {ok, CpuValFromMySQL} ->
-                                    lager:info("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Success! Value '~p'~n", 
+                                    lager:info("[TaskControl] 'SELECT s_cpu FROM resource_limit' -- Success! Value '~p'~n", 
                                         [CpuValFromMySQL]),
                                     CpuValFromMySQL;
                                 _ ->
-                                    lager:warning("[nms_task_control] 'SELECT s_cpu FROM resource_limit' -- Failed! 
+                                    lager:warning("[TaskControl] 'SELECT s_cpu FROM resource_limit' -- Failed! 
                                         Use ~p by default!~n", [?CPU_THRESHOLD_DEFAULT]),
                                     ?CPU_THRESHOLD_DEFAULT
                             end;
                         {ok, CpuValFromRedis} ->
-                            lager:info("[nms_task_control] 'GET server_cpu_limit' -- Success! Value(~p)~n", [CpuValFromRedis]),
+                            lager:info("[TaskControl] 'GET server_cpu_limit' -- Success! Value(~p)~n", [CpuValFromRedis]),
                             CpuValFromRedis
                     end,
                     
@@ -942,10 +953,10 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     case gen_server:call(RedisTask, 
                             {update_physical_server_cpu_resource, binary_to_list(DevMoid_), CpuAverage}, infinity) of
                         {error, CpuErr4} ->
-                            lager:warning("[nms_task_control] 'HMSET p_server:~p:resource cpu xx' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET p_server:~p:resource cpu xx' -- Failed! Error '~p'~n", 
                                 [DevMoid, CpuErr4]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET p_server:~p:resource cpu ~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'HMSET p_server:~p:resource cpu ~p' -- Success!~n", 
                                 [DevMoid, CpuAverage])
                     end,
                     io:format("", []);
@@ -974,27 +985,40 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
                     case gen_server:call(MySQLTask, {add_memory_statistic, DomainMoid, DevMoid, MemUsePct, StatisticTime}, infinity) of
                         {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO memory_statistic' -- Success!");
+                            lager:info("[TaskControl] 'INSERT INTO memory_statistic' -- Success!");
                         {error, MemErr0} ->
-                            lager:warning("[nms_task_control] 'INSERT INTO memory_statistic' -- Failed! Error '~p'~n", [MemErr0])
+                            lager:warning("[TaskControl] 'INSERT INTO memory_statistic' -- Failed! Error '~p'~n", [MemErr0])
                     end,
 
                     %% 查询保存 Mem 阈值信息的表 resource_limit
                     Mem_Threshold = case gen_server:call(RedisTask, {get_server_mem_limit}, infinity) of
-                        {error, MemErr1} ->
-                            lager:warning("[nms_task_control] 'GET server_memory_limit' -- Failed! Error '~p'~n", [MemErr1]),
+                        {error, MemErr1} ->  %% no_connection
+                            lager:warning("[TaskControl] 'GET server_memory_limit' -- Failed! Error '~p'~n", [MemErr1]),
                             case gen_server:call(MySQLTask, {get_server_mem_limit}, infinity) of
-                                {ok, MemValFromMySQL} ->
-                                    lager:info("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Success! Value '~p'~n", 
+                                {ok, []} ->
+                                    lager:warning("[TaskControl] 'SELECT s_memory FROM resource_limit' -- Failed! 
+                                        Error 'Value not Set', Use ~p by default!~n", [?MEM_THRESHOLD_DEFAULT]),
+                                    ?MEM_THRESHOLD_DEFAULT;
+                                {ok, [MemValFromMySQL]} ->
+                                    lager:info("[TaskControl] 'SELECT s_memory FROM resource_limit' -- Success! Value '~p'~n", 
                                         [MemValFromMySQL]),
-                                    MemValFromMySQL;
-                                _ ->
-                                    lager:warning("[nms_task_control] 'SELECT s_memory FROM resource_limit' -- Failed! 
-                                        Use ~p by default!~n", [?MEM_THRESHOLD_DEFAULT]),
-                                    ?MEM_THRESHOLD_DEFAULT
+                                    MemValFromMySQL
+                            end;
+                        {ok, undefined} ->
+                            lager:warning("[TaskControl] 'GET server_memory_limit' -- Failed! Error 'Key non-Exist'"),
+                            case gen_server:call(MySQLTask, {get_server_mem_limit}, infinity) of
+                                {ok, []} ->
+                                    lager:warning("[TaskControl] 'SELECT s_memory FROM resource_limit' -- Failed! 
+                                        Error 'Value not Set', Use ~p by default!~n", [?MEM_THRESHOLD_DEFAULT]),
+                                    ?MEM_THRESHOLD_DEFAULT;
+                                {ok, [MemValFromMySQL]} ->
+                                    lager:info("[TaskControl] 'SELECT s_memory FROM resource_limit' -- Success! Value '~p'~n", 
+                                        [MemValFromMySQL]),
+                                    MemValFromMySQL
                             end;
                         {ok, MemValFromRedis} ->
-                            lager:info("[nms_task_control] 'GET server_memory_limit' -- Success! Value(~p)~n", [MemValFromRedis]),
+                            lager:info("[TaskControl] 'GET server_memory_limit' -- Success! Value(~p)~n", 
+                                [MemValFromRedis]),
                             MemValFromRedis
                     end,
 
@@ -1015,10 +1039,10 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %% 更新 redis 表 p_server:devid:resource
                     case gen_server:call(RedisTask, {update_physical_server_mem_resource, DevMoid, MemUsePct}, infinity) of
                         {error, MemErr2} ->
-                            lager:warning("[nms_task_control] 'HMSET p_server:~p:resource memory xx' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET p_server:~p:resource memory xx' -- Failed! Error '~p'~n", 
                                 [DevMoid, MemErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET p_server:~p:resource memory ~p' -- Success!", 
+                            lager:info("[TaskControl] 'HMSET p_server:~p:resource memory ~p' -- Success!", 
                                 [DevMoid, MemUsePct])
                     end,
                     io:format("", []);
@@ -1046,27 +1070,27 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
                     case gen_server:call(MySQLTask, {add_disk_statistic,DomainMoid,DevMoid,DiskUsePct,StatisticTime}, infinity) of
                         {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO disk_statistic' -- Success!");
+                            lager:info("[TaskControl] 'INSERT INTO disk_statistic' -- Success!");
                         {error, DiskErr0} ->
-                            lager:warning("[nms_task_control] 'INSERT INTO disk_statistic' -- Failed! Error '~p'~n", [DiskErr0])
+                            lager:warning("[TaskControl] 'INSERT INTO disk_statistic' -- Failed! Error '~p'~n", [DiskErr0])
                     end,
 
                     %% 查询保存 Disk 阈值信息的表 resource_limit
                     Disk_Threshold = case gen_server:call(RedisTask, {get_server_disk_limit}, infinity) of
                         {error, DiskErr1} ->
-                            lager:warning("[nms_task_control] 'GET server_disk_limit' -- Failed! Error '~p'~n", [DiskErr1]),
+                            lager:warning("[TaskControl] 'GET server_disk_limit' -- Failed! Error '~p'~n", [DiskErr1]),
                             case gen_server:call(MySQLTask, {get_server_disk_limit}, infinity) of
                                 {ok, DiskValFromMySQL} ->
-                                    lager:info("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
+                                    lager:info("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
                                         [DiskValFromMySQL]),
                                     DiskValFromMySQL;
                                 _ ->
-                                    lager:warning("[nms_task_control] 'SELECT s_disk FROM resource_limit' -- Failed! 
+                                    lager:warning("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Failed! 
                                         Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
                                     ?DISK_THRESHOLD_DEFAULT
                             end;
                         {ok, DiskValFromRedis} ->
-                            lager:info("[nms_task_control] 'GET server_disk_limit' -- Success! Value(~p)~n", [DiskValFromRedis]),
+                            lager:info("[TaskControl] 'GET server_disk_limit' -- Success! Value(~p)~n", [DiskValFromRedis]),
                             DiskValFromRedis
                     end,
 
@@ -1087,10 +1111,10 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %% 更新 redis 表 p_server:devid:resource
                     case gen_server:call(RedisTask, {update_physical_server_disk_resource, DevMoid, DiskUsePct}, infinity) of
                         {error, DiskErr2} ->
-                            lager:warning("[nms_task_control] 'HMSET p_server:~p:resource disk xx' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET p_server:~p:resource disk xx' -- Failed! Error '~p'~n", 
                                 [DevMoid, DiskErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET p_server:~p:resource disk ~p' -- Success!", 
+                            lager:info("[TaskControl] 'HMSET p_server:~p:resource disk ~p' -- Success!", 
                                 [DevMoid, DiskUsePct])
                     end,
                     io:format("", []);
@@ -1145,19 +1169,19 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     %% 查询 Redis 保存 发送/接收流量 阈值信息的表 resource_limit
                     Net_Threshold = case gen_server:call(RedisTask, {get_server_net_limit}, infinity) of
                         {error, NetErr1} ->
-                            lager:warning("[nms_task_control] 'GET server_port_limit' -- Failed! Error '~p'~n", [NetErr1]),
+                            lager:warning("[TaskControl] 'GET server_port_limit' -- Failed! Error '~p'~n", [NetErr1]),
                             case gen_server:call(MySQLTask, {get_server_net_limit}, infinity) of
                                 {ok, NetValFromMySQL} ->
-                                    lager:info("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
+                                    lager:info("[TaskControl] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
                                         [NetValFromMySQL]),
                                     NetValFromMySQL;
                                 _ ->
-                                    lager:warning("[nms_task_control] 'SELECT s_port FROM resource_limit' -- Failed! 
+                                    lager:warning("[TaskControl] 'SELECT s_port FROM resource_limit' -- Failed! 
                                         Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
                                     ?NET_THRESHOLD_DEFAULT
                             end;
                         {ok, NetValFromRedis} ->
-                            lager:info("[nms_task_control] 'GET server_port_limit' -- Success! Value(~p)~n", [NetValFromRedis]),
+                            lager:info("[TaskControl] 'GET server_port_limit' -- Success! Value(~p)~n", [NetValFromRedis]),
                             NetValFromRedis
                     end,
 
@@ -1184,10 +1208,10 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                     case gen_server:call(RedisTask, {update_physical_server_net_resource, DevMoid, RecvKBytesTotal, SendKBytesTotal}, 
                             infinity) of
                         {error, DiskErr2} ->
-                            lager:warning("[nms_task_control] 'HMSET p_server:~p:resource portin xx portout xx' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET p_server:~p:resource portin xx portout xx' -- Failed! Error '~p'~n", 
                                 [DevMoid, DiskErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET p_server:~p:resource portin ~p portout ~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'HMSET p_server:~p:resource portin ~p portout ~p' -- Success!~n", 
                                 [DevMoid, RecvKBytesTotal, SendKBytesTotal])
                     end,
 
@@ -1226,14 +1250,14 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
                     io:format("", []);
                 OtherEvent     ->
-                    lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
+                    lager:info("[TaskControl] get '~p' event, do nothing!~n", [OtherEvent])
             end;
 
         {error,<<"Key Error">>} ->
-            lager:warning("[nms_task_control] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
+            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
             throw(redis_key_error);
         {error, no_connection} ->
-            lager:error("[nms_task_control] lost redis connection!"),
+            lager:error("[TaskControl] lost redis connection!"),
             throw(redis_connection_lost)
     end.
 
@@ -1247,7 +1271,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
             {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
             StatisticTime = integer_to_list(Year)++"/"++integer_to_list(Month)++"/"++integer_to_list(Day)++":"++
                             integer_to_list(Hour)++":"++integer_to_list(Min)++":"++integer_to_list(Sec),
-            lager:info("[nms_task_control] find no rpttime, so make it myself:~p~n", 
+            lager:info("[TaskControl] find no rpttime, so make it myself:~p~n", 
                 [StatisticTime]);
         _ ->
             StatisticTime = binary_to_list(StatisticTime_)
@@ -1288,7 +1312,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%       {"devtype",<<"SERVICE_TS_SRV_MPCD">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_DEV_ONLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
@@ -1297,28 +1321,28 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%  设置 Redis 表 l_server:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_logic_server_online, DevMoid}, infinity) of
                         {error, LogDevOnlineErr0} ->
-                            lager:warning("[nms_task_control] 'SET l_server:~p:online online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SET l_server:~p:online online' -- Failed! Error '~p'~n", 
                                 [DevMoid, LogDevOnlineErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SET l_server:~p:online online' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'SET l_server:~p:online online' -- Success!~n", [DevMoid])
                     end,
 
                     %% 向 Redis 的 SET 表 collector 中保存 collectorid
                     case gen_server:call(RedisTask, {add_collectorid, CollectorID}, infinity) of
                         {error, LogDevOnlineErr1} ->
-                            lager:warning("[nms_task_control] 'SADD collector ~p' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD collector ~p' -- Failed! Error '~p'~n", 
                                 [CollectorID, LogDevOnlineErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD collector ~p' -- Success!~n", [CollectorID])
+                            lager:info("[TaskControl] 'SADD collector ~p' -- Success!~n", [CollectorID])
                     end,
 
                     %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
                     case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
                         {error, LogDevOnlineErr2} ->
-                            lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, LogDevOnlineErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevGuid])
                     end,
 
@@ -1331,7 +1355,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%       {"devtype",<<"SERVICE_TS_SRV_MPCD">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_DEV_OFFLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
@@ -1340,37 +1364,37 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%  删除 Redis 表 l_server:devid:online
                     case gen_server:call(RedisTask, {del_logic_server_online, DevMoid}, infinity) of
                         {error, LogDevOfflineErr0} ->
-                            lager:warning("[nms_task_control] 'DEL l_server:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL l_server:~p:online' -- Failed! Error '~p'~n", 
                                 [DevMoid, LogDevOfflineErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL l_server:~p:online' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL l_server:~p:online' -- Success!~n", [DevMoid])
                     end,
 
                     %%  删除 Redis 表 l_server:devid:connection
                     case gen_server:call(RedisTask, {del_logic_server_connections, DevMoid}, infinity) of
                         {error, LogDevOfflineErr1} ->
-                            lager:warning("[nms_task_control] 'DEL l_server:~p:connection' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL l_server:~p:connection' -- Failed! Error '~p'~n", 
                                 [DevMoid, LogDevOfflineErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL l_server:~p:connection' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL l_server:~p:connection' -- Success!~n", [DevMoid])
                     end,
 
                     %%  删除 Redis 表 l_server:devid:warning
                     case gen_server:call(RedisTask, {del_logic_server_warning_all, DevMoid}, infinity) of
                         {error, LogDevOfflineErr2} ->
-                            lager:warning("[nms_task_control] 'DEL l_server:~p:warning' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL l_server:~p:warning' -- Failed! Error '~p'~n", 
                                 [DevMoid, LogDevOfflineErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL l_server:~p:warning' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL l_server:~p:warning' -- Success!~n", [DevMoid])
                     end,
 
                     %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
                     case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
                         {error, LogDevOfflineErr3} ->
-                            lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, LogDevOfflineErr3]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevGuid])
                     end,
 
@@ -1380,10 +1404,10 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             CompletePasDomainInfo = "domain:" ++ PlatformDomainMoid ++ ":pas:" ++ DevMoid,
                             case gen_server:call(RedisTask, {del_pas_in_all_domains, CompletePasDomainInfo}, infinity) of
                                 {error, LogDevOfflineErr4} ->
-                                    lager:warning("[nms_task_control] 'SREM pas_in_all_domains ~p' -- Failed! Error '~p'~n", 
+                                    lager:warning("[TaskControl] 'SREM pas_in_all_domains ~p' -- Failed! Error '~p'~n", 
                                         [CompletePasDomainInfo, LogDevOfflineErr4]);
                                 {ok, _} ->
-                                    lager:info("[nms_task_control] 'SREM pas_in_all_domains ~p' -- Success!~n", 
+                                    lager:info("[TaskControl] 'SREM pas_in_all_domains ~p' -- Success!~n", 
                                         [CompletePasDomainInfo])
                             end;
                         'XMPP' ->
@@ -1391,10 +1415,10 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             XmppDomainKey = "domain:" ++ DomainMoid ++ ":xmpp_online",
                             case gen_server:call(RedisTask, {del_xmpp_in_all_domains, XmppDomainKey}, infinity) of
                                 {error, LogDevOfflineErr5} ->
-                                    lager:warning("[nms_task_control] 'SREM xmpp_in_all_domains ~p' -- Failed! Error '~p'~n", 
+                                    lager:warning("[TaskControl] 'SREM xmpp_in_all_domains ~p' -- Failed! Error '~p'~n", 
                                         [XmppDomainKey, LogDevOfflineErr5]);
                                 {ok, _} ->
-                                    lager:info("[nms_task_control] 'SREM xmpp_in_all_domains ~p' -- Success!~n", 
+                                    lager:info("[TaskControl] 'SREM xmpp_in_all_domains ~p' -- Success!~n", 
                                         [XmppDomainKey])
                             end;
                         _ ->
@@ -1414,7 +1438,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%           {obj,[{"onlinecount",123}]}},
                     %%       {"eventid",<<"EV_XMPP_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_XMPP_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_XMPP_INFO' event!~n", []),
 
                     XmppVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
                     lager:info("  -->  XMPP Version = ~p~n", [XmppVersion_]),
@@ -1449,10 +1473,10 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% 向 redis 的 STRING 表 domain:DomainMoid:xmpp_online 中保存 XMPP 在线数
                     case gen_server:call(RedisTask, {add_xmpp_online_statistic, DomainMoid, OnlineNum}, infinity) of
                         {error, XmppInfoErr0} ->
-                            lager:warning("[nms_task_control] 'SET domain:~p:xmpp_online ~p' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SET domain:~p:xmpp_online ~p' -- Failed! Error '~p'~n", 
                                 [DomainMoid, OnlineNum, XmppInfoErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SET domain:~p:xmpp_online ~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'SET domain:~p:xmpp_online ~p' -- Success!~n", 
                                 [DomainMoid, OnlineNum])
                     end,
 
@@ -1460,10 +1484,10 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     XmppDomainKey = "domain:" ++ DomainMoid ++ ":xmpp_online",
                     case gen_server:call(RedisTask, {add_xmpp_in_all_domains, XmppDomainKey}, infinity) of
                         {error, XmppInfoErr1} ->
-                            lager:warning("[nms_task_control] 'SADD xmpp_in_all_domains ~p' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD xmpp_in_all_domains ~p' -- Failed! Error '~p'~n", 
                                 [XmppDomainKey, XmppInfoErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD xmpp_in_all_domains ~p' -- Success!~n", [XmppDomainKey])
+                            lager:info("[TaskControl] 'SADD xmpp_in_all_domains ~p' -- Success!~n", [XmppDomainKey])
                     end,
 
                     io:format("", []);
@@ -1480,7 +1504,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"currtestcount",123}]}},
                     %%       {"eventid",<<"EV_NDS_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_NDS_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_NDS_INFO' event!~n", []),
 
                     NdsVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
                     lager:info("  -->  NDS Version = ~p~n", [NdsVersion_]),
@@ -1525,7 +1549,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"currsrvcount",123}]}},
                     %%       {"eventid",<<"EV_LGS_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_LGS_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_LGS_INFO' event!~n", []),
 
                     LgsVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
                     lager:info("  -->  LGS Version = ~p~n", [LgsVersion_]),
@@ -1569,7 +1593,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"currusercount",123}]}},
                     %%       {"eventid",<<"EV_APS_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_APS_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_APS_INFO' event!~n", []),
 
                     ApsVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
                     lager:info("  -->  APS Version = ~p~n", [ApsVersion_]),
@@ -1613,7 +1637,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"curregsussrvcount",123}]}},
                     %%       {"eventid",<<"EV_SUSMGR_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_SUSMGR_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_SUSMGR_INFO' event!~n", []),
 
                     SusMgrVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
                     lager:info("  -->  SUS Manager Version = ~p~n", [SusMgrVersion_]),
@@ -1657,7 +1681,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"curregdevcount",123}]}},
                     %%       {"eventid",<<"EV_SUS_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_SUS_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_SUS_INFO' event!~n", []),
 
                     SusVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
                     lager:info("  -->  SUS Version = ~p~n", [SusVersion_]),
@@ -1702,7 +1726,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"conftype",0}]}},
                     %%       {"eventid",<<"EV_MCU_MT_DEL">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_MCU_MT_DEL' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_MCU_MT_DEL' event!~n", []),
 
                     MtInfo = rfc4627:get_field(JsonObj, "mtinfo", undefined),
 
@@ -1730,11 +1754,11 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             %% 将 redis 的 HASH 表 t_meeting:ConfE164:info 中的 terminal 的值 -1
                             case gen_server:call(RedisTask, {dec_traditional_meeting_terminal_num, ConfE164}, infinity) of
                                 {error, McuMtDelErr0} ->
-                                    lager:warning("[nms_task_control] 'HINCRBY t_meeting:~p:info terminal -1' -- Failed! Error '~p'~n", 
+                                    lager:warning("[TaskControl] 'HINCRBY t_meeting:~p:info terminal -1' -- Failed! Error '~p'~n", 
                                         [ConfE164, McuMtDelErr0]);
 
                                 {ok, TMeetingTerNum} ->
-                                    lager:info("[nms_task_control] 'HINCRBY t_meeting:~p:info terminal -1' -- Success! TMeetingTerNum=~p~n",
+                                    lager:info("[TaskControl] 'HINCRBY t_meeting:~p:info terminal -1' -- Success! TMeetingTerNum=~p~n",
                                         [ConfE164, TMeetingTerNum])
                             end;
                         1 ->
@@ -1743,11 +1767,11 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             %% 将 redis 的 HASH 表 p_meeting:ConfE164:info 中的 terminal 的值 -1
                             case gen_server:call(RedisTask, {dec_port_meeting_terminal_num, ConfE164}, infinity) of
                                 {error, McuMtDelErr1} ->
-                                    lager:warning("[nms_task_control] 'HINCRBY p_meeting:~p:info terminal -1' -- Failed! Error '~p'~n",
+                                    lager:warning("[TaskControl] 'HINCRBY p_meeting:~p:info terminal -1' -- Failed! Error '~p'~n",
                                         [ConfE164, McuMtDelErr1]);
 
                                 {ok, PMeetingTerNum} ->
-                                    lager:info("[nms_task_control] 'HINCRBY p_meeting:~p:info terminal -1' -- Success! PMeetingTerNum=~p~n",
+                                    lager:info("[TaskControl] 'HINCRBY p_meeting:~p:info terminal -1' -- Success! PMeetingTerNum=~p~n",
                                         [ConfE164, PMeetingTerNum])
                             end;
                         _ ->
@@ -1757,13 +1781,13 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% 从 redis 的 HASH 表 terminal:TerminalE164:baseinfo 查 TerminalMoid
                     case gen_server:call(RedisTask, {get_terminal_base_info_by_e164, TerminalE164}, infinity) of
                         {error, McuMtDelErr2} ->
-                            lager:warning("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
                                 [TerminalE164, McuMtDelErr2]),
-                            lager:warning("[nms_task_control] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
+                            lager:warning("[TaskControl] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
                                 [TerminalE164]),
                             TerminalMoid_ = <<"match no domain">>;
                         {ok, {TerminalMoid_,_,_,_}} ->
-                            lager:info("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Success! TerminalMoid=~p~n", 
+                            lager:info("[TaskControl] 'HGETALL terminal:~p:baseinfo' -- Success! TerminalMoid=~p~n", 
                                 [TerminalE164, TerminalMoid_])
                     end,
                     TerminalMoid = binary_to_list(TerminalMoid_),
@@ -1771,11 +1795,11 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% 将 redis 的 STRING 表 terminal:TerminalMoid:conf:ConfE164:enter_times 中的值 +0（获取当前值）
                     case gen_server:call(RedisTask, {get_terminal_enter_meeting_times, TerminalMoid, ConfE164}, infinity) of
                         {error, McuMtDelErr3} ->
-                            lager:warning("[nms_task_control] 'INCRBY terminal:~p:conf:~p:enter_times +0' -- Failed! Error '~p'~n",
+                            lager:warning("[TaskControl] 'INCRBY terminal:~p:conf:~p:enter_times +0' -- Failed! Error '~p'~n",
                                 [TerminalMoid, ConfE164, McuMtDelErr3]);
 
                         {ok, TerEnterTimes_} ->
-                            lager:info("[nms_task_control] 'INCRBY terminal:~p:conf:~p:enter_times +0' -- Success! TerEnterTimes=~p~n", 
+                            lager:info("[TaskControl] 'INCRBY terminal:~p:conf:~p:enter_times +0' -- Success! TerEnterTimes=~p~n", 
                                 [TerminalMoid, ConfE164, TerEnterTimes_]),
 
                             TerEnterTimes = binary_to_list(TerEnterTimes_), 
@@ -1785,11 +1809,11 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             case gen_server:call(RedisTask, {add_terminal_leave_meeting_info, TerminalMoid, ConfE164, 
                                     TerEnterTimes, TerLeaveTime, TerLeaveReason}, infinity) of
                                 {error, McuMtDelErr4} ->
-                                    lager:warning("[nms_task_control] 'HMSET terminal:~p:conf:~p:enter_leave_info:~p' -- Failed! Error '~p'~n",
+                                    lager:warning("[TaskControl] 'HMSET terminal:~p:conf:~p:enter_leave_info:~p' -- Failed! Error '~p'~n",
                                         [TerminalMoid, ConfE164, TerEnterTimes, McuMtDelErr4]);
 
                                 {ok, _} ->
-                                    lager:info("[nms_task_control] 'HMSET terminal:~p:conf:~p:enter_leave_info:~p' -- Success!~n", 
+                                    lager:info("[TaskControl] 'HMSET terminal:~p:conf:~p:enter_leave_info:~p' -- Success!~n", 
                                         [TerminalMoid, ConfE164, TerEnterTimes])
                             end
                     end,
@@ -1797,20 +1821,20 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% 从 redis 的 SET 表 meeting:ConfE164:terminal 中删除 TerminalE164
                     case gen_server:call(RedisTask, {del_meeting_terminal, ConfE164, TerminalE164}, infinity) of
                         {error, McuMtDelErr5} ->
-                            lager:warning("[nms_task_control] 'SREM meeting:~p:terminal' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SREM meeting:~p:terminal' -- Failed! Error '~p'~n", 
                                 [ConfE164, McuMtDelErr5]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SREM meeting:~p:terminal' -- Success! TerminalE164=~p~n", 
+                            lager:info("[TaskControl] 'SREM meeting:~p:terminal' -- Success! TerminalE164=~p~n", 
                                 [ConfE164, TerminalE164])
                     end,
 
                     %% 删除 redis 的 HASH 表 terminal:TerminalMoid:meetingdetail
                     case gen_server:call(RedisTask, {del_terminal_meeting_detail, TerminalMoid}, infinity) of
                         {error, McuMtDelErr6} ->
-                            lager:warning("[nms_task_control] 'DEL terminal:~p:meetingdetail' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL terminal:~p:meetingdetail' -- Failed! Error '~p'~n", 
                                 [TerminalMoid, McuMtDelErr6]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL terminal:~p:meetingdetail' -- Success!~n", 
+                            lager:info("[TaskControl] 'DEL terminal:~p:meetingdetail' -- Success!~n", 
                                 [TerminalMoid])
                     end,
 
@@ -1823,14 +1847,14 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% terminal:TerminalMoid:meetingdetail:audio_recv_chan
                     case gen_server:call(RedisTask, {del_terminal_meeting_channels, TerminalMoid}, infinity) of
                         {error, McuMtDelErr7} ->
-                            lager:warning("[nms_task_control] 'DEL terminal:~p:meetingdetail:[chantpye]:[index]' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL terminal:~p:meetingdetail:[chantpye]:[index]' -- Failed! Error '~p'~n", 
                                 [TerminalMoid, McuMtDelErr7]),
-                            lager:warning("[nms_task_control] 'DEL terminal:~p:meetingdetail:[chantpye]' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL terminal:~p:meetingdetail:[chantpye]' -- Failed! Error '~p'~n", 
                                 [TerminalMoid, McuMtDelErr7]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL terminal:~p:meetingdetail:[chantpye]:[index]' -- Success!~n", 
+                            lager:info("[TaskControl] 'DEL terminal:~p:meetingdetail:[chantpye]:[index]' -- Success!~n", 
                                 [TerminalMoid]),
-                            lager:info("[nms_task_control] 'DEL terminal:~p:meetingdetail:[chantpye]' -- Success!~n", 
+                            lager:info("[TaskControl] 'DEL terminal:~p:meetingdetail:[chantpye]' -- Success!~n", 
                                 [TerminalMoid])
                     end,
 
@@ -1848,7 +1872,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"conftype",0}]}},
                     %%       {"eventid",<<"EV_MCU_MT_ADD">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_MCU_MT_ADD' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_MCU_MT_ADD' event!~n", []),
 
                     MtInfo = rfc4627:get_field(JsonObj, "mtinfo", undefined),
 
@@ -1872,11 +1896,11 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             %% 将 redis 的 HASH 表 t_meeting:ConfE164:info 中的 terminal 的值 +1
                             case gen_server:call(RedisTask, {inc_traditional_meeting_terminal_num, ConfE164}, infinity) of
                                 {error, McuMtAddErr0} ->
-                                    lager:warning("[nms_task_control] 'HINCRBY t_meeting:~p:info terminal +1' -- Failed! Error '~p'~n", 
+                                    lager:warning("[TaskControl] 'HINCRBY t_meeting:~p:info terminal +1' -- Failed! Error '~p'~n", 
                                         [ConfE164, McuMtAddErr0]);
 
                                 {ok, TMeetingTerNum} ->
-                                    lager:info("[nms_task_control] 'HINCRBY t_meeting:~p:info terminal +1' -- Success! TMeetingTerNum=~p~n",
+                                    lager:info("[TaskControl] 'HINCRBY t_meeting:~p:info terminal +1' -- Success! TMeetingTerNum=~p~n",
                                         [ConfE164, TMeetingTerNum])
                             end;
                         1 ->
@@ -1885,11 +1909,11 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             %% 将 redis 的 HASH 表 p_meeting:ConfE164:info 中的 terminal 的值 +1
                             case gen_server:call(RedisTask, {inc_port_meeting_terminal_num, ConfE164}, infinity) of
                                 {error, McuMtAddErr1} ->
-                                    lager:warning("[nms_task_control] 'HINCRBY p_meeting:~p:info terminal +1' -- Failed! Error '~p'~n",
+                                    lager:warning("[TaskControl] 'HINCRBY p_meeting:~p:info terminal +1' -- Failed! Error '~p'~n",
                                         [ConfE164, McuMtAddErr1]);
 
                                 {ok, PMeetingTerNum} ->
-                                    lager:info("[nms_task_control] 'HINCRBY p_meeting:~p:info terminal +1' -- Success! PMeetingTerNum=~p~n",
+                                    lager:info("[TaskControl] 'HINCRBY p_meeting:~p:info terminal +1' -- Success! PMeetingTerNum=~p~n",
                                         [ConfE164, PMeetingTerNum])
                             end;
                         _ ->
@@ -1899,13 +1923,13 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% 从 redis 的 HASH 表 terminal:TerminalE164:baseinfo 查 TerminalMoid
                     case gen_server:call(RedisTask, {get_terminal_base_info_by_e164, TerminalE164}, infinity) of
                         {error, McuMtAddErr2} ->
-                            lager:warning("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
                                 [TerminalE164, McuMtAddErr2]),
-                            lager:warning("[nms_task_control] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
+                            lager:warning("[TaskControl] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
                                 [TerminalE164]),
                             TerminalMoid_ = <<"match no domain">>;
                         {ok, {TerminalMoid_,_,_,_}} ->
-                            lager:info("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Success! TerminalMoid=~p~n", 
+                            lager:info("[TaskControl] 'HGETALL terminal:~p:baseinfo' -- Success! TerminalMoid=~p~n", 
                                 [TerminalE164, TerminalMoid_])
                     end,
                     TerminalMoid = binary_to_list(TerminalMoid_),
@@ -1913,11 +1937,11 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% 将 redis 的 STRING 表 terminal:TerminalMoid:conf:ConfE164:enter_times 中的值 +1
                     case gen_server:call(RedisTask, {inc_terminal_enter_meeting_times, TerminalMoid, ConfE164}, infinity) of
                         {error, McuMtAddErr3} ->
-                            lager:warning("[nms_task_control] 'INCRBY terminal:~p:conf:~p:enter_times +1' -- Failed! Error '~p'~n",
+                            lager:warning("[TaskControl] 'INCRBY terminal:~p:conf:~p:enter_times +1' -- Failed! Error '~p'~n",
                                 [TerminalMoid, ConfE164, McuMtAddErr3]);
 
                         {ok, TerEnterTimes_} ->
-                            lager:info("[nms_task_control] 'INCRBY terminal:~p:conf:~p:enter_times +1' -- Success! TerEnterTimes=~p~n", 
+                            lager:info("[TaskControl] 'INCRBY terminal:~p:conf:~p:enter_times +1' -- Success! TerEnterTimes=~p~n", 
                                 [TerminalMoid, ConfE164, TerEnterTimes_]),
 
                             TerEnterTimes = binary_to_list(TerEnterTimes_), 
@@ -1926,11 +1950,11 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             case gen_server:call(RedisTask, 
                                     {add_terminal_enter_meeting_info, TerminalMoid, ConfE164, TerEnterTimes, TerEnterTime}, infinity) of
                                 {error, McuMtAddErr4} ->
-                                    lager:warning("[nms_task_control] 'HSET terminal:~p:conf:~p:enter_leave_info:~p' -- Failed! Error '~p'~n",
+                                    lager:warning("[TaskControl] 'HSET terminal:~p:conf:~p:enter_leave_info:~p' -- Failed! Error '~p'~n",
                                         [TerminalMoid, ConfE164, TerEnterTimes, McuMtAddErr4]);
 
                                 {ok, _} ->
-                                    lager:info("[nms_task_control] 'HSET terminal:~p:conf:~p:enter_leave_info:~p' -- Success!~n", 
+                                    lager:info("[TaskControl] 'HSET terminal:~p:conf:~p:enter_leave_info:~p' -- Success!~n", 
                                         [TerminalMoid, ConfE164, TerEnterTimes])
                             end
                     end,
@@ -1938,10 +1962,10 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% 向 redis 的 SET 表 meeting:ConfE164:terminal 中保存 TerminalE164
                     case gen_server:call(RedisTask, {add_meeting_terminal, ConfE164, TerminalE164}, infinity) of
                         {error, McuMtAddErr5} ->
-                            lager:warning("[nms_task_control] 'SADD meeting:~p:terminal' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD meeting:~p:terminal' -- Failed! Error '~p'~n", 
                                 [ConfE164, McuMtAddErr5]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD meeting:~p:terminal' -- Success! TerminalE164=~p~n", 
+                            lager:info("[TaskControl] 'SADD meeting:~p:terminal' -- Success! TerminalE164=~p~n", 
                                 [ConfE164, TerminalE164])
                     end,
 
@@ -1958,7 +1982,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"confe164",<<"0512**999">>}]}},
                     %%       {"eventid",<<"EV_MCU_CONF_DESTROY">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_MCU_CONF_DESTROY' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_MCU_CONF_DESTROY' event!~n", []),
 
                     ConfInfo = rfc4627:get_field(JsonObj, "confinfo", undefined),
 
@@ -1973,36 +1997,36 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
                             case gen_server:call(RedisTask, {del_traditional_meeting, ConfE164}, infinity) of
                                 {error, McuConfDestroyErr0} ->
-                                    lager:warning("[nms_task_control] 'MULTI'~n", []),
-                                    lager:warning("[nms_task_control] 'SREM domain:ConfDomainMoid:t_meeting ~p~n", [ConfE164]),
-                                    lager:warning("[nms_task_control] 'DEL t_meeting:~p:info~n", [ConfE164]),
-                                    lager:warning("[nms_task_control] 'DEL meeting:~p:terminal~n", [ConfE164]),
-                                    lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [McuConfDestroyErr0]);
+                                    lager:warning("[TaskControl] 'MULTI'~n", []),
+                                    lager:warning("[TaskControl] 'SREM domain:ConfDomainMoid:t_meeting ~p~n", [ConfE164]),
+                                    lager:warning("[TaskControl] 'DEL t_meeting:~p:info~n", [ConfE164]),
+                                    lager:warning("[TaskControl] 'DEL meeting:~p:terminal~n", [ConfE164]),
+                                    lager:warning("[TaskControl] 'EXEC' -- Failed! Error '~p'~n", [McuConfDestroyErr0]);
 
                                 {ok, _} ->
-                                    lager:info("[nms_task_control] 'MULTI'~n", []),
-                                    lager:info("[nms_task_control] 'SREM domain:ConfDomainMoid:t_meeting ~p~n", [ConfE164]),
-                                    lager:info("[nms_task_control] 'DEL t_meeting:~p:info~n", [ConfE164]),
-                                    lager:info("[nms_task_control] 'DEL meeting:~p:terminal~n", [ConfE164]),
-                                    lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                                    lager:info("[TaskControl] 'MULTI'~n", []),
+                                    lager:info("[TaskControl] 'SREM domain:ConfDomainMoid:t_meeting ~p~n", [ConfE164]),
+                                    lager:info("[TaskControl] 'DEL t_meeting:~p:info~n", [ConfE164]),
+                                    lager:info("[TaskControl] 'DEL meeting:~p:terminal~n", [ConfE164]),
+                                    lager:info("[TaskControl] 'EXEC' -- Success!~n", [])
                             end;
                         1 ->
                             lager:info("  -->  Conf Type = Port~n", []),
 
                             case gen_server:call(RedisTask, {del_port_meeting, ConfE164}, infinity) of
                                 {error, McuConfDestroyErr1} ->
-                                    lager:warning("[nms_task_control] 'MULTI'~n", []),
-                                    lager:warning("[nms_task_control] 'SREM domain:ConfDomainMoid:p_meeting ~p~n", [ConfE164]),
-                                    lager:warning("[nms_task_control] 'DEL p_meeting:~p:info~n", [ConfE164]),
-                                    lager:warning("[nms_task_control] 'DEL meeting:~p:terminal~n", [ConfE164]),
-                                    lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [McuConfDestroyErr1]);
+                                    lager:warning("[TaskControl] 'MULTI'~n", []),
+                                    lager:warning("[TaskControl] 'SREM domain:ConfDomainMoid:p_meeting ~p~n", [ConfE164]),
+                                    lager:warning("[TaskControl] 'DEL p_meeting:~p:info~n", [ConfE164]),
+                                    lager:warning("[TaskControl] 'DEL meeting:~p:terminal~n", [ConfE164]),
+                                    lager:warning("[TaskControl] 'EXEC' -- Failed! Error '~p'~n", [McuConfDestroyErr1]);
 
                                 {ok, _} ->
-                                    lager:info("[nms_task_control] 'MULTI'~n", []),
-                                    lager:info("[nms_task_control] 'SREM domain:ConfDomainMoid:p_meeting ~p~n", [ConfE164]),
-                                    lager:info("[nms_task_control] 'DEL p_meeting:~p:info~n", [ConfE164]),
-                                    lager:info("[nms_task_control] 'DEL meeting:~p:terminal~n", [ConfE164]),
-                                    lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                                    lager:info("[TaskControl] 'MULTI'~n", []),
+                                    lager:info("[TaskControl] 'SREM domain:ConfDomainMoid:p_meeting ~p~n", [ConfE164]),
+                                    lager:info("[TaskControl] 'DEL p_meeting:~p:info~n", [ConfE164]),
+                                    lager:info("[TaskControl] 'DEL meeting:~p:terminal~n", [ConfE164]),
+                                    lager:info("[TaskControl] 'EXEC' -- Success!~n", [])
                             end;
                         _ ->
                             throw(conftype_enum_error)
@@ -2029,7 +2053,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"endtime",<<"2014/06/16:09:57:50">>}]}},
                     %%       {"eventid",<<"EV_MCU_CONF_CREATE">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_MCU_CONF_CREATE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_MCU_CONF_CREATE' event!~n", []),
 
                     ConfInfo = rfc4627:get_field(JsonObj, "confinfo", undefined),
 
@@ -2067,16 +2091,16 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             case gen_server:call(RedisTask, {add_traditional_meeting, ConfDomainMoid, ConfE164, ConfName, 
                                     ConfBandWidth, "mix", ConfStartTime, ConfStopTime}, infinity) of
                                 {error, McuConfCreateErr0} ->
-                                    lager:warning("[nms_task_control] 'MULTI'~n", []),
-                                    lager:warning("[nms_task_control] 'SADD domain:~p:t_meeting ~p~n", [ConfDomainMoid, ConfE164]),
-                                    lager:warning("[nms_task_control] 'HMSET t_meeting:~p:info~n", [ConfE164]),
-                                    lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [McuConfCreateErr0]);
+                                    lager:warning("[TaskControl] 'MULTI'~n", []),
+                                    lager:warning("[TaskControl] 'SADD domain:~p:t_meeting ~p~n", [ConfDomainMoid, ConfE164]),
+                                    lager:warning("[TaskControl] 'HMSET t_meeting:~p:info~n", [ConfE164]),
+                                    lager:warning("[TaskControl] 'EXEC' -- Failed! Error '~p'~n", [McuConfCreateErr0]);
 
                                 {ok, _} ->
-                                    lager:info("[nms_task_control] 'MULTI'~n", []),
-                                    lager:info("[nms_task_control] 'SADD domain:~p:t_meeting ~p~n", [ConfDomainMoid, ConfE164]),
-                                    lager:info("[nms_task_control] 'HMSET t_meeting:~p:info~n", [ConfE164]),
-                                    lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                                    lager:info("[TaskControl] 'MULTI'~n", []),
+                                    lager:info("[TaskControl] 'SADD domain:~p:t_meeting ~p~n", [ConfDomainMoid, ConfE164]),
+                                    lager:info("[TaskControl] 'HMSET t_meeting:~p:info~n", [ConfE164]),
+                                    lager:info("[TaskControl] 'EXEC' -- Success!~n", [])
                             end;
                         1 ->
                             lager:info("  -->  Conf Type = Port~n", []),
@@ -2084,16 +2108,16 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             case gen_server:call(RedisTask, {add_port_meeting, ConfDomainMoid, ConfE164, ConfName, ConfBandWidth, 
                                     ConfPortNum, ConfStartTime, ConfStopTime}, infinity) of
                                 {error, McuConfCreateErr1} ->
-                                    lager:warning("[nms_task_control] 'MULTI'~n", []),
-                                    lager:warning("[nms_task_control] 'SADD domain:~p:p_meeting ~p~n", [ConfDomainMoid, ConfE164]),
-                                    lager:warning("[nms_task_control] 'HMSET p_meeting:~p:info~n", [ConfE164]),
-                                    lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [McuConfCreateErr1]);
+                                    lager:warning("[TaskControl] 'MULTI'~n", []),
+                                    lager:warning("[TaskControl] 'SADD domain:~p:p_meeting ~p~n", [ConfDomainMoid, ConfE164]),
+                                    lager:warning("[TaskControl] 'HMSET p_meeting:~p:info~n", [ConfE164]),
+                                    lager:warning("[TaskControl] 'EXEC' -- Failed! Error '~p'~n", [McuConfCreateErr1]);
 
                                 {ok, _} ->
-                                    lager:info("[nms_task_control] 'MULTI'~n", []),
-                                    lager:info("[nms_task_control] 'SADD domain:~p:p_meeting ~p~n", [ConfDomainMoid, ConfE164]),
-                                    lager:info("[nms_task_control] 'HMSET p_meeting:~p:info~n", [ConfE164]),
-                                    lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                                    lager:info("[TaskControl] 'MULTI'~n", []),
+                                    lager:info("[TaskControl] 'SADD domain:~p:p_meeting ~p~n", [ConfDomainMoid, ConfE164]),
+                                    lager:info("[TaskControl] 'HMSET p_meeting:~p:info~n", [ConfE164]),
+                                    lager:info("[TaskControl] 'EXEC' -- Success!~n", [])
                             end;
                         _ ->
                             throw(conftype_enum_error)
@@ -2120,7 +2144,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"connectedmpcadaptcount",123}]}},
                     %%       {"eventid",<<"EV_MCU_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_MCU_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_MCU_INFO' event!~n", []),
 
                     %% 版本信息和升级服务器有关，暂时不做处理
                     MCUVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
@@ -2170,7 +2194,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"conftempcount",123}]}},
                     %%       {"eventid",<<"EV_MPCD_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_MPCD_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_MPCD_INFO' event!~n", []),
 
                     %% 版本信息和升级服务器有关，暂时不做处理
                     MPCDVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
@@ -2226,7 +2250,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"confname",<<"conf-XXX">>}]}},
                     %%       {"eventid",<<"EV_PAS_P2PCONF_CREATE">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_PAS_P2PCONF_CREATE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_PAS_P2PCONF_CREATE' event!~n", []),
 
                     P2PConfInfo = rfc4627:get_field(JsonObj, "confinfo", undefined),
 
@@ -2262,26 +2286,26 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %% 从 redis 的 HASH 表 terminal:callerE164:baseinfo 和 terminal:calleeE164:baseinfo 中查 domain_moid
                     case gen_server:call(RedisTask, {get_terminal_base_info_by_e164, CallerE164}, infinity) of
                         {error, PasP2PConfCreateErr0} ->
-                            lager:warning("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
                                 [CallerE164, PasP2PConfCreateErr0]),
-                            lager:warning("[nms_task_control] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
+                            lager:warning("[TaskControl] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
                                 [CallerE164]),
                             CallerDomainMoid_ = <<"match no domain">>;
                         {ok, {_,CallerDomainMoid_,_,_}} ->
-                            lager:info("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Success! CallerDomainMoid=~p~n", 
+                            lager:info("[TaskControl] 'HGETALL terminal:~p:baseinfo' -- Success! CallerDomainMoid=~p~n", 
                                 [CallerE164, CallerDomainMoid_])
                     end,
                     CallerDomainMoid = binary_to_list(CallerDomainMoid_),
 
                     case gen_server:call(RedisTask, {get_terminal_base_info_by_e164, CalleeE164}, infinity) of
                         {error, PasP2PConfCreateErr1} ->
-                            lager:warning("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HGETALL terminal:~p:baseinfo' -- Failed! Error '~p'~n", 
                                 [CalleeE164, PasP2PConfCreateErr1]),
-                            lager:warning("[nms_task_control] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
+                            lager:warning("[TaskControl] Find no terminal info by E164, Make sure E164(~p) is Correct!~n",
                                 [CalleeE164]),
                             CalleeDomainMoid_ = <<"match no domain">>;
                         {ok, {_,CalleeDomainMoid_,_,_}} ->
-                            lager:info("[nms_task_control] 'HGETALL terminal:~p:baseinfo' -- Success! CalleeDomainMoid=~p~n", 
+                            lager:info("[TaskControl] 'HGETALL terminal:~p:baseinfo' -- Success! CalleeDomainMoid=~p~n", 
                                 [CalleeE164, CalleeDomainMoid_])
                     end,
                     CalleeDomainMoid = binary_to_list(CalleeDomainMoid_),
@@ -2291,18 +2315,18 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     case gen_server:call(RedisTask, {add_p2p_meeting, CallerDomainMoid, CallerE164, CallerName, CallerType, 
                             CalleeDomainMoid, CalleeE164, CalleeName, CalleeType, ConfBitRate, ConfStartTime}, infinity) of
                         {error, PasP2PConfCreateErr2} ->
-                            lager:warning("[nms_task_control] 'MULTI'~n", []),
-                            lager:warning("[nms_task_control] 'SADD domain:~p:p2p_meeting ~p~n", [CallerDomainMoid, CallerE164]),
-                            lager:warning("[nms_task_control] 'SADD domain:~p:p2p_meeting ~p~n", [CalleeDomainMoid, CallerE164]),
-                            lager:warning("[nms_task_control] 'HMSET p2p_meeting:~p:info~n", [CallerE164]),
-                            lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [PasP2PConfCreateErr2]);
+                            lager:warning("[TaskControl] 'MULTI'~n", []),
+                            lager:warning("[TaskControl] 'SADD domain:~p:p2p_meeting ~p~n", [CallerDomainMoid, CallerE164]),
+                            lager:warning("[TaskControl] 'SADD domain:~p:p2p_meeting ~p~n", [CalleeDomainMoid, CallerE164]),
+                            lager:warning("[TaskControl] 'HMSET p2p_meeting:~p:info~n", [CallerE164]),
+                            lager:warning("[TaskControl] 'EXEC' -- Failed! Error '~p'~n", [PasP2PConfCreateErr2]);
 
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'MULTI'~n", []),
-                            lager:info("[nms_task_control] 'SADD domain:~p:p2p_meeting ~p~n", [CallerDomainMoid, CallerE164]),
-                            lager:info("[nms_task_control] 'SADD domain:~p:p2p_meeting ~p~n", [CalleeDomainMoid, CallerE164]),
-                            lager:info("[nms_task_control] 'HMSET p2p_meeting:~p:info~n", [CallerE164]),
-                            lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                            lager:info("[TaskControl] 'MULTI'~n", []),
+                            lager:info("[TaskControl] 'SADD domain:~p:p2p_meeting ~p~n", [CallerDomainMoid, CallerE164]),
+                            lager:info("[TaskControl] 'SADD domain:~p:p2p_meeting ~p~n", [CalleeDomainMoid, CallerE164]),
+                            lager:info("[TaskControl] 'HMSET p2p_meeting:~p:info~n", [CallerE164]),
+                            lager:info("[TaskControl] 'EXEC' -- Success!~n", [])
                     end,
 
                     io:format("", []);
@@ -2317,7 +2341,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"calleeE164",<<"0512111885804">>}]}},
                     %%       {"eventid",<<"EV_PAS_P2PCONF_DESTROY">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_PAS_P2PCONF_DESTROY' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_PAS_P2PCONF_DESTROY' event!~n", []),
 
                     P2PConfInfo = rfc4627:get_field(JsonObj, "confinfo", undefined),
 
@@ -2327,18 +2351,18 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
                     case gen_server:call(RedisTask, {del_p2p_meeting, CallerE164}, infinity) of
                         {error, PasP2PConfDestroyErr0} ->
-                            lager:warning("[nms_task_control] 'MULTI'~n", []),
-                            lager:warning("[nms_task_control] 'SREM domain:CallerDomainMoid:p2p_meeting ~p~n", [CallerE164]),
-                            lager:warning("[nms_task_control] 'SREM domain:CalleeDomainMoid:p2p_meeting ~p~n", [CallerE164]),
-                            lager:warning("[nms_task_control] 'DEL p2p_meeting:~p:info~n", [CallerE164]),
-                            lager:warning("[nms_task_control] 'EXEC' -- Failed! Error '~p'~n", [PasP2PConfDestroyErr0]);
+                            lager:warning("[TaskControl] 'MULTI'~n", []),
+                            lager:warning("[TaskControl] 'SREM domain:CallerDomainMoid:p2p_meeting ~p~n", [CallerE164]),
+                            lager:warning("[TaskControl] 'SREM domain:CalleeDomainMoid:p2p_meeting ~p~n", [CallerE164]),
+                            lager:warning("[TaskControl] 'DEL p2p_meeting:~p:info~n", [CallerE164]),
+                            lager:warning("[TaskControl] 'EXEC' -- Failed! Error '~p'~n", [PasP2PConfDestroyErr0]);
 
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'MULTI'~n", []),
-                            lager:info("[nms_task_control] 'SREM domain:CallerDomainMoid:p2p_meeting ~p~n", [CallerE164]),
-                            lager:info("[nms_task_control] 'SREM domain:CalleeDomainMoid:p2p_meeting ~p~n", [CallerE164]),
-                            lager:info("[nms_task_control] 'DEL p2p_meeting:~p:info~n", [CallerE164]),
-                            lager:info("[nms_task_control] 'EXEC' -- Success!~n", [])
+                            lager:info("[TaskControl] 'MULTI'~n", []),
+                            lager:info("[TaskControl] 'SREM domain:CallerDomainMoid:p2p_meeting ~p~n", [CallerE164]),
+                            lager:info("[TaskControl] 'SREM domain:CalleeDomainMoid:p2p_meeting ~p~n", [CallerE164]),
+                            lager:info("[TaskControl] 'DEL p2p_meeting:~p:info~n", [CallerE164]),
+                            lager:info("[TaskControl] 'EXEC' -- Success!~n", [])
                     end,
 
                     io:format("", []);
@@ -2361,7 +2385,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     %%                 {"maxonlinecount",123}]}},
                     %%       {"eventid",<<"EV_PAS_INFO">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_PAS_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_PAS_INFO' event!~n", []),
 
                     PASVersion_ = rfc4627:get_field(JsonObj, "version", undefined),
                     lager:info("  -->  PAS Version = ~p~n", [PASVersion_]),
@@ -2413,34 +2437,34 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                     case gen_server:call(RedisTask, 
                             {add_pas_online_statistic, PlatformDomainMoid, DevMoid, H323Online, SIPOnline, MonitorOnline}, infinity) of
                         {error, PasInfoErr1} ->
-                            lager:warning("[nms_task_control] 'HMSET domain:~p:pas:~p' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET domain:~p:pas:~p' -- Failed! Error '~p'~n", 
                                 [PlatformDomainMoid, DevMoid, PasInfoErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET domain:~p:pas:~p' -- Success!~n", [PlatformDomainMoid, DevMoid])
+                            lager:info("[TaskControl] 'HMSET domain:~p:pas:~p' -- Success!~n", [PlatformDomainMoid, DevMoid])
                     end,
 
                     %% 向 redis 的 SET 表 pas_in_all_domains 中保存 domain:PlatformDomainMoid:pas:pas_moid 字符串
                     CompletePasDomainInfo = "domain:" ++ PlatformDomainMoid ++ ":pas:" ++ DevMoid,
                     case gen_server:call(RedisTask, {add_pas_in_all_domains, CompletePasDomainInfo}, infinity) of
                         {error, PasInfoErr2} ->
-                            lager:warning("[nms_task_control] 'SADD pas_in_all_domains ~p' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD pas_in_all_domains ~p' -- Failed! Error '~p'~n", 
                                 [CompletePasDomainInfo, PasInfoErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD pas_in_all_domains ~p' -- Success!~n", [CompletePasDomainInfo])
+                            lager:info("[TaskControl] 'SADD pas_in_all_domains ~p' -- Success!~n", [CompletePasDomainInfo])
                     end,
 
                     io:format("", []);
 
                 OtherEvent     ->
-                    lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
+                    lager:info("[TaskControl] get '~p' event, do nothing!~n", [OtherEvent])
             end;
 
         {error,<<"Key Error">>} ->
-            lager:warning("[nms_task_control] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
+            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
             throw(redis_key_error);
 
         {error, no_connection} ->
-            lager:error("[nms_task_control] lost redis connection!"),
+            lager:error("[TaskControl] lost redis connection!"),
             throw(redis_connection_lost)
     end.
 
@@ -2457,7 +2481,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
             {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
             StatisticTime = integer_to_list(Year)++"/"++integer_to_list(Month)++"/"++integer_to_list(Day)++":"++
                             integer_to_list(Hour)++":"++integer_to_list(Min)++":"++integer_to_list(Sec),
-            lager:info("[nms_task_control] find no rpttime, so make it myself:~p~n", 
+            lager:info("[TaskControl] find no rpttime, so make it myself:~p~n", 
                 [StatisticTime]);
         _ ->
             StatisticTime = binary_to_list(StatisticTime_)
@@ -2491,7 +2515,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%       {"devtype",<<"SERVICE_KDV_MT_TS6610">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
                     %% 
-                    lager:info("[nms_task_control] get 'EV_DEV_ONLINE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_DEV_ONLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
@@ -2500,28 +2524,28 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%  设置 Redis 表 terminal:devid:online 的值为 online
                     case gen_server:call(RedisTask, {add_terminal_online, DevMoid}, infinity) of
                         {error, TerDevOnlineErr0} ->
-                            lager:warning("[nms_task_control] 'SET terminal:~p:online online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SET terminal:~p:online online' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevOnlineErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SET terminal:~p:online online' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'SET terminal:~p:online online' -- Success!~n", [DevMoid])
                     end,
 
                     %% 向 Redis 的 SET 表 collector 中保存 collectorid
                     case gen_server:call(RedisTask, {add_collectorid, CollectorID}, infinity) of
                         {error, TerDevOnlineErr1} ->
-                            lager:warning("[nms_task_control] 'SADD collector ~p' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD collector ~p' -- Failed! Error '~p'~n", 
                                 [CollectorID, TerDevOnlineErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD collector ~p' -- Success!~n", [CollectorID])
+                            lager:info("[TaskControl] 'SADD collector ~p' -- Success!~n", [CollectorID])
                     end,
 
                     %% 向 Redis 表 collector:collectorid:online 中写入 devtype:devid 信息
                     case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, TerDevOnlineErr2} ->
-                            lager:warning("[nms_task_control] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, TerDevOnlineErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevMoid])
                     end,
                     io:format("", []);
@@ -2533,7 +2557,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%       {"devtype",<<"SERVICE_TS_SRV_MPCD">>},
                     %%       {"collectorid",<<"60a44c502a60">>}]}
                     %% 
-                    lager:info("[nms_task_control] get 'EV_DEV_OFFLINE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_DEV_OFFLINE' event!~n", []),
 
                     CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
                     lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
@@ -2542,55 +2566,55 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%  删除 Redis 表 terminal:devid:online
                     case gen_server:call(RedisTask, {del_terminal_online, DevMoid}, infinity) of
                         {error, TerDevOfflineErr0} ->
-                            lager:warning("[nms_task_control] 'DEL terminal:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL terminal:~p:online' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevOfflineErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL terminal:~p:online' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL terminal:~p:online' -- Success!~n", [DevMoid])
                     end,
 
                     %%  删除 Redis 表 terminal:devid:connection
                     case gen_server:call(RedisTask, {del_terminal_connections, DevMoid}, infinity) of
                         {error, TerDevOfflineErr1} ->
-                            lager:warning("[nms_task_control] 'DEL terminal:~p:connection' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL terminal:~p:connection' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevOfflineErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL terminal:~p:connection' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL terminal:~p:connection' -- Success!~n", [DevMoid])
                     end,
 
                     %%  删除 Redis 表 terminal:devid:resource
                     case gen_server:call(RedisTask, {del_terminal_resource, DevMoid}, infinity) of
                         {error, TerDevOfflineErr2} ->
-                            lager:warning("[nms_task_control] 'DEL terminal:~p:resource' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL terminal:~p:resource' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevOfflineErr2]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL terminal:~p:resource' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL terminal:~p:resource' -- Success!~n", [DevMoid])
                     end,
 
                     %%  删除 Redis 表 terminal:devid:warning
                     case gen_server:call(RedisTask, {del_terminal_warning_all, DevMoid}, infinity) of
                         {error, TerDevOfflineErr3} ->
-                            lager:warning("[nms_task_control] 'DEL terminal:~p:warning' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL terminal:~p:warning' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevOfflineErr3]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL terminal:~p:warning' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL terminal:~p:warning' -- Success!~n", [DevMoid])
                     end,
 
                     %%  删除 Redis 表 terminal:devid:runninginfo
                     case gen_server:call(RedisTask, {del_terminal_running_info, DevMoid}, infinity) of
                         {error, TerDevOfflineErr4} ->
-                            lager:warning("[nms_task_control] 'DEL terminal:~p:runninginfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'DEL terminal:~p:runninginfo' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevOfflineErr4]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'DEL terminal:~p:runninginfo' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'DEL terminal:~p:runninginfo' -- Success!~n", [DevMoid])
                     end,
 
                     %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
                     case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, TerDevOfflineErr5} ->
-                            lager:warning("[nms_task_control] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, TerDevOfflineErr5]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
+                            lager:info("[TaskControl] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
                                 [CollectorID, DevType, DevMoid])
                     end,
                     io:format("", []);
@@ -2616,7 +2640,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%                           {"ip",<<"172.16.72.84">>}]}},
                     %%                 {"os",<<"XP">>}]}},
                     %%       {"eventid",<<"EV_MT_INFO">>}]}
-                    lager:info("[nms_task_control] get 'EV_MT_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_MT_INFO' event!~n", []),
 
                     MtInfo = rfc4627:get_field(JsonObj, "mt_info", undefined),
 
@@ -2683,20 +2707,20 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     case gen_server:call(RedisTask, {add_terminal_running_info, DevMoid, atom_to_list(Type), DevVer, 
                             OS, CpuType, CpuFreq, TerCpuNum, MemoryGBList}, infinity) of
                         {error, TerDevInfoErr0} ->
-                            lager:warning("[nms_task_control] 'HMSET terminal:~p:runninginfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET terminal:~p:runninginfo' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevInfoErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET terminal:~p:runninginfo' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'HMSET terminal:~p:runninginfo' -- Success!~n", [DevMoid])
                     end,
 
                     %% 向 Redis 的 terminal:devid:netinfo 表中保存终端 APS 和网络相关信息
                     case gen_server:call(RedisTask, {add_terminal_aps_and_net_info, DevMoid, TerIp, TerNatIp, TerDns, 
                             APSDomainName, APSIp}, infinity) of
                         {error, TerDevInfoErr1} ->
-                            lager:warning("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevInfoErr1]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
                     end,
 
                     io:format("", []);
@@ -2711,7 +2735,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%                 {"ip",<<"172.16.72.84">>}]}},
                     %%       {"eventid",<<"EV_NETINFO_MSG">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_NETINFO_MSG' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_NETINFO_MSG' event!~n", []),
 
                     NetInfo = rfc4627:get_field(JsonObj, "netinfo", undefined),
 
@@ -2730,10 +2754,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %% 向 Redis 的 terminal:devid:netinfo 表中保存终端 网络相关信息
                     case gen_server:call(RedisTask, {add_terminal_net_info, DevMoid, TerIp, TerNatIp, TerDns}, infinity) of
                         {error, TerDevNetInfoErr0} ->
-                            lager:warning("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevNetInfoErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
                     end,
 
                     io:format("", []);
@@ -2750,7 +2774,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%                 {"drop_rate",3}]}},
                     %%       {"eventid",<<"EV_BANDWIDTH_MSG">>}]}
 
-                    lager:info("[nms_task_control] get 'EV_BANDWIDTH_MSG' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_BANDWIDTH_MSG' event!~n", []),
 
                     RBW = rfc4627:get_field(JsonObj, "recv_bandwidth", undefined),
 
@@ -2776,10 +2800,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     case gen_server:call(RedisTask, {add_terminal_bandwidth_info, 
                             DevMoid, SendBandWidth, SendDropRate, RecvBandWidth, RecvDropRate}, infinity) of
                         {error, TerDevBandwidthInfoErr0} ->
-                            lager:warning("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET terminal:~p:netinfo' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerDevBandwidthInfoErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'HMSET terminal:~p:netinfo' -- Success!~n", [DevMoid])
                     end,
 
                     io:format("", []);
@@ -2792,7 +2816,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%       {"oem",<<"dddd">>},
                     %%       {"recommend",1},
                     %%       {"eventid",<<"EV_VERSION_MSG">>}]}
-                    lager:info("[nms_task_control] get 'EV_VERSION_MSG' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_VERSION_MSG' event!~n", []),
 
                     Oem_ = rfc4627:get_field(JsonObj, "oem", undefined),
                     lager:info("  -->  Oem = ~p~n", [Oem_]),
@@ -2812,9 +2836,9 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                             {add_terminal_version_statistic,DomainMoid,DevMoid,E164,atom_to_list(Type),Oem,Version,Recommend}, 
                             infinity) of
                         {ok, success} ->
-                            lager:info("[nms_task_control] 'INSERT INTO terminal_version_statistic' -- Success!~n", []);
+                            lager:info("[TaskControl] 'INSERT INTO terminal_version_statistic' -- Success!~n", []);
                         _ ->
-                            lager:warning("[nms_task_control] 'INSERT INTO terminal_version_statistic' -- Failed!~n", [])
+                            lager:warning("[TaskControl] 'INSERT INTO terminal_version_statistic' -- Failed!~n", [])
                     end,                    
                     io:format("", []);
 
@@ -2827,7 +2851,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%                 {"mem_userate",85},
                     %%                 {"disk_userate",75}]}},
                     %%       {"eventid",<<"EV_PFMINFO_MSG">>}]}
-                    lager:info("[nms_task_control] get 'EV_PFMINFO_MSG' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_PFMINFO_MSG' event!~n", []),
 
                     PFMInfo = rfc4627:get_field(JsonObj, "pfm_info", undefined),
 
@@ -2846,10 +2870,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %% 向 Redis 表 terminal:devid:resource 中插入信息
                     case gen_server:call(RedisTask, {add_terminal_resource, DevMoid, CpuPct, DiskPct, MemPct}, infinity) of
                         {error, TerPFMInfoErr0} ->
-                            lager:warning("[nms_task_control] 'HMSET terminal:~p:resource' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET terminal:~p:resource' -- Failed! Error '~p'~n", 
                                 [DevMoid, TerPFMInfoErr0]);
                         {ok, _} ->
-                            lager:info("[nms_task_control] 'HMSET terminal:~p:resource' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'HMSET terminal:~p:resource' -- Success!~n", [DevMoid])
                     end,
                     io:format("", []); 
 
@@ -2862,7 +2886,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%           <<"PAS">>,
                     %%           <<"SUS">>]},
                     %%       {"eventid",<<"EV_SHOULD_CONNSRV_MSG">>}]}
-                    lager:info("[nms_task_control] get 'EV_SHOULD_CONNSRV_MSG' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_SHOULD_CONNSRV_MSG' event!~n", []),
 
                     ConSrvTypeInfo_ = rfc4627:get_field(JsonObj, "conn_srv_type_info", undefined),
                     ConSrvTypeInfo = lists:map( fun(Srv) -> binary_to_list(Srv) end, ConSrvTypeInfo_ ),
@@ -2870,10 +2894,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %% 向 redis 表 terminal:devid:connection 中保存需要连接服务器的 ip 信息（将 IP 置空）
                     case gen_server:call(RedisTask, {add_terminal_connections, DevMoid, ConSrvTypeInfo}, infinity) of
                         {error, ShConSrvErr0} ->
-                            lager:warning("[nms_task_control] '(Pipeline)HSET terminal:~p:connection' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] '(Pipeline)HSET terminal:~p:connection' -- Failed! Error '~p'~n", 
                                 [DevMoid, ShConSrvErr0]);
                         _ ->
-                            lager:info("[nms_task_control] '(Pipeline)HSET terminal:~p:connection' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] '(Pipeline)HSET terminal:~p:connection' -- Success!~n", [DevMoid])
                     end,
 
                     io:format("", []);
@@ -2890,7 +2914,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%            {obj,[{"ip",<<"172.16.72.82">>},
                     %%                  {"type",<<"SUS">>}]}]},
                     %%       {"eventid",<<"EV_CONNSRV_CONN_MSG">>}]}
-                    lager:info("[nms_task_control] get 'EV_CONNSRV_CONN_MSG' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_CONNSRV_CONN_MSG' event!~n", []),
 
                     ConSrvStateInfo = rfc4627:get_field(JsonObj, "conn_srv_state_info", undefined),
 
@@ -2901,10 +2925,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %% 向 redis 表 terminal:devid:connection 中更新服务器 ip 信息
                     case gen_server:call(RedisTask, {update_terminal_connections, DevMoid, ServerConInfoList}, infinity) of
                         {error, ConSrvErr0} ->
-                            lager:warning("[nms_task_control] '(Pipeline)HSET terminal:~p:connection' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] '(Pipeline)HSET terminal:~p:connection' -- Failed! Error '~p'~n", 
                                 [DevMoid, ConSrvErr0]);
                         _ ->  %% [{ok,<<"0">>},...]
-                            lager:info("[nms_task_control] '(Pipeline)HSET terminal:~p:connection' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] '(Pipeline)HSET terminal:~p:connection' -- Success!~n", [DevMoid])
                     end,
 
                     io:format("", []); 
@@ -2918,7 +2942,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%           <<"PAS">>,
                     %%           <<"SUS">>]},
                     %%       {"eventid",<<"EV_CONNSRV_DESC_MSG">>}]}
-                    lager:info("[nms_task_control] get 'EV_CONNSRV_DESC_MSG' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_CONNSRV_DESC_MSG' event!~n", []),
 
                     DiscSrvTypeInfo_ = rfc4627:get_field(JsonObj, "conn_srv_type_info", undefined),
                     DiscSrvTypeInfo = lists:map( fun(DiscSrv) -> binary_to_list(DiscSrv) end, DiscSrvTypeInfo_ ),
@@ -2926,10 +2950,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %% 向 redis 表 terminal:devid:connection 中保存需要连接服务器的 ip 信息（将 IP 置空）
                     case gen_server:call(RedisTask, {add_terminal_connections, DevMoid, DiscSrvTypeInfo}, infinity) of
                         {error, DiscSrvErr0} ->
-                            lager:warning("[nms_task_control] '(Pipeline)HSET terminal:~p:connection' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] '(Pipeline)HSET terminal:~p:connection' -- Failed! Error '~p'~n", 
                                 [DevMoid, DiscSrvErr0]);
                         _ ->
-                            lager:info("[nms_task_control] '(Pipeline)HSET terminal:~p:connection' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] '(Pipeline)HSET terminal:~p:connection' -- Success!~n", [DevMoid])
                     end,
 
                     io:format("", []); 
@@ -2943,7 +2967,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%                 {"start_time",<<"2014/05/08:12:08:08">>},
                     %%                 {"status",0}]}},
                     %%       {"eventid",<<"EV_ALARM_MSG">>}]}
-                    lager:info("[nms_task_control] get 'EV_ALARM_MSG' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_ALARM_MSG' event!~n", []),
 
                     AlarmInfo = rfc4627:get_field(JsonObj, "alarm_info", undefined),
 
@@ -2987,7 +3011,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%                 {"execption_file",<<"moooofly.err">>},
                     %%                 {"execption_time",<<"2014/05/08:12:08:08">>}]}},
                     %%       {"eventid",<<"EV_EXCEPTION_FILE">>}]}
-                    lager:info("[nms_task_control] get 'EV_EXCEPTION_FILE' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_EXCEPTION_FILE' event!~n", []),
 
                     ExecptionInfo = rfc4627:get_field(JsonObj, "execption_info", undefined),
 
@@ -3061,7 +3085,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     %%                           {"audio_pkts_loserate",2},
                     %%                           {"audio_down_bitrate",64}]}]}]}},
                     %%       {"eventid",<<"EV_CONF_INFO">>}]}
-                    lager:info("[nms_task_control] get 'EV_CONF_INFO' event!~n", []),
+                    lager:info("[TaskControl] get 'EV_CONF_INFO' event!~n", []),
 
                     MTState = rfc4627:get_field(JsonObj, "mt_state", undefined),
                     ConfDesc = case MTState of 
@@ -3094,14 +3118,14 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                             Fun0 = fun(ChannelInfo) ->
                                 ChannelID = rfc4627:get_field(ChannelInfo, "id", undefined),
                                 WarningCode = channelid_to_warningcode(ChannelID),
-                                lager:info("[nms_task_control] WarningCode = ~p~n", [WarningCode]),
+                                lager:info("[TaskControl] WarningCode = ~p~n", [WarningCode]),
                                 VideoSrcLostTriggered = case rfc4627:get_field(ChannelInfo, "video_resource_exist", undefined) of 
                                     0 -> 
                                         true;
                                     1 -> 
                                         false;
                                     _ ->
-                                        lager:warning("[nms_task_control] Find no video_resource_exist, Assume =0~n", []),
+                                        lager:warning("[TaskControl] Find no video_resource_exist, Assume =0~n", []),
                                         true
                                 end,
                     %% ------------------------------------------------------------
@@ -3118,16 +3142,16 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
 
                             lists:foreach(Fun0, PriVideoSend);
                         true ->
-                            lager:warning("[nms_task_control] privideo_send not exist! Weird!~n", [])
+                            lager:warning("[TaskControl] privideo_send not exist! Weird!~n", [])
                     end,
 
                     %% 将会议详情信息保存到 redis 表 terminal:devid:meetingdetail 中，不区分点对点还是多点会议
                     case gen_server:call(RedisTask, {add_terminal_meeting_detail, DevMoid, MT_E164, Conf_E164, ConfBitRate}, infinity) of
                         {error, MTConfInfoErr0} ->
-                            lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail' -- Failed! Error '~p'~n", 
+                            lager:warning("[TaskControl] 'HMSET terminal:~p:meetingdetail' -- Failed! Error '~p'~n", 
                                 [DevMoid, MTConfInfoErr0]);
                         _ ->
-                            lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail' -- Success!~n", [DevMoid])
+                            lager:info("[TaskControl] 'HMSET terminal:~p:meetingdetail' -- Success!~n", [DevMoid])
                     end,
 
                     %% 将会议音视频路数信息分别保存到如下 redis 表中
@@ -3221,10 +3245,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                         case gen_server:call(RedisTask, 
                                 {add_terminal_channel_detail, DevMoid, privideo_send_chan, ChanID, KeyValuePairs}, infinity) of
                             {error, MTConfInfoErr1} ->
-                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:privideo_send_chan:~p' -- Failed! 
+                                lager:warning("[TaskControl] 'HMSET terminal:~p:meetingdetail:privideo_send_chan:~p' -- Failed! 
                                     Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr1]);
                             _ ->
-                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:privideo_send_chan:~p' -- Success!~n", 
+                                lager:info("[TaskControl] 'HMSET terminal:~p:meetingdetail:privideo_send_chan:~p' -- Success!~n", 
                                     [DevMoid, ChanID])
                         end
                     end,
@@ -3256,10 +3280,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                         case gen_server:call(RedisTask, 
                                 {add_terminal_channel_detail, DevMoid, privideo_recv_chan, ChanID, KeyValuePairs}, infinity) of
                             {error, MTConfInfoErr2} ->
-                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:privideo_recv_chan:~p' -- Failed! 
+                                lager:warning("[TaskControl] 'HMSET terminal:~p:meetingdetail:privideo_recv_chan:~p' -- Failed! 
                                     Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr2]);
                             _ ->
-                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:privideo_recv_chan:~p' -- Success!~n", 
+                                lager:info("[TaskControl] 'HMSET terminal:~p:meetingdetail:privideo_recv_chan:~p' -- Success!~n", 
                                     [DevMoid, ChanID])
                         end
                     end,
@@ -3291,10 +3315,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                         case gen_server:call(RedisTask, 
                                 {add_terminal_channel_detail, DevMoid, assvideo_send_chan, ChanID, KeyValuePairs}, infinity) of
                             {error, MTConfInfoErr3} ->
-                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:assvideo_send_chan:~p' -- Failed! 
+                                lager:warning("[TaskControl] 'HMSET terminal:~p:meetingdetail:assvideo_send_chan:~p' -- Failed! 
                                     Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr3]);
                             _ ->
-                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:assvideo_send_chan:~p' -- Success!~n", 
+                                lager:info("[TaskControl] 'HMSET terminal:~p:meetingdetail:assvideo_send_chan:~p' -- Success!~n", 
                                     [DevMoid, ChanID])
                         end
                     end,
@@ -3326,10 +3350,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                         case gen_server:call(RedisTask, 
                                 {add_terminal_channel_detail, DevMoid, assvideo_recv_chan, ChanID, KeyValuePairs}, infinity) of
                             {error, MTConfInfoErr4} ->
-                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:assvideo_recv_chan:~p' -- Failed! 
+                                lager:warning("[TaskControl] 'HMSET terminal:~p:meetingdetail:assvideo_recv_chan:~p' -- Failed! 
                                     Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr4]);
                             _ ->
-                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:assvideo_recv_chan:~p' -- Success!~n", 
+                                lager:info("[TaskControl] 'HMSET terminal:~p:meetingdetail:assvideo_recv_chan:~p' -- Success!~n", 
                                     [DevMoid, ChanID])
                         end
                     end,
@@ -3357,10 +3381,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                         case gen_server:call(RedisTask, 
                                 {add_terminal_channel_detail, DevMoid, audio_send_chan, ChanID, KeyValuePairs}, infinity) of
                             {error, MTConfInfoErr5} ->
-                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:audio_send_chan:~p' -- Failed! 
+                                lager:warning("[TaskControl] 'HMSET terminal:~p:meetingdetail:audio_send_chan:~p' -- Failed! 
                                     Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr5]);
                             _ ->
-                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:audio_send_chan:~p' -- Success!~n", 
+                                lager:info("[TaskControl] 'HMSET terminal:~p:meetingdetail:audio_send_chan:~p' -- Success!~n", 
                                     [DevMoid, ChanID])
                         end
                     end,
@@ -3392,10 +3416,10 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                         case gen_server:call(RedisTask, 
                                 {add_terminal_channel_detail, DevMoid, audio_recv_chan, ChanID, KeyValuePairs}, infinity) of
                             {error, MTConfInfoErr6} ->
-                                lager:warning("[nms_task_control] 'HMSET terminal:~p:meetingdetail:audio_recv_chan:~p' -- Failed! 
+                                lager:warning("[TaskControl] 'HMSET terminal:~p:meetingdetail:audio_recv_chan:~p' -- Failed! 
                                     Error '~p'~n", [DevMoid, ChanID, MTConfInfoErr6]);
                             _ ->
-                                lager:info("[nms_task_control] 'HMSET terminal:~p:meetingdetail:audio_recv_chan:~p' -- Success!~n", 
+                                lager:info("[TaskControl] 'HMSET terminal:~p:meetingdetail:audio_recv_chan:~p' -- Success!~n", 
                                     [DevMoid, ChanID])
                         end
                     end,                    
@@ -3404,14 +3428,14 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                     io:format("", []);
 
                 OtherEvent     ->
-                    lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
+                    lager:info("[TaskControl] get '~p' event, do nothing!~n", [OtherEvent])
             end;
 
         {error,<<"Key Error">>} ->
-            lager:warning("[nms_task_control] get <<\"Key Error\">> for key ~p~n", [DevMoid]),
+            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p~n", [DevMoid]),
             throw(redis_key_error);
         {error, no_connection} ->
-            lager:error("[nms_task_control] lost redis connection!"),
+            lager:error("[TaskControl] lost redis connection!"),
             throw(redis_connection_lost)
     end.
 
@@ -3425,7 +3449,7 @@ collector_heartbeat_proc(JsonObj, RedisTask, _MySQLTask) ->
             {{Year,Month,Day},{Hour,Min,Sec}} = calendar:now_to_local_time(os:timestamp()),
             StatisticTime = integer_to_list(Year)++"/"++integer_to_list(Month)++"/"++integer_to_list(Day)++":"++
                             integer_to_list(Hour)++":"++integer_to_list(Min)++":"++integer_to_list(Sec),
-            lager:info("[nms_task_control] find no rpttime, so make it myself:~p~n", 
+            lager:info("[TaskControl] find no rpttime, so make it myself:~p~n", 
                 [StatisticTime]);
         _ ->
             StatisticTime = binary_to_list(StatisticTime_)
@@ -3445,7 +3469,7 @@ collector_heartbeat_proc(JsonObj, RedisTask, _MySQLTask) ->
             %%       {"collectorid",<<"60a44c502a60">>},
             %%       {"eventid",<<"EV_COLLECTOR_HEARTBEAT">>}]}
 
-            lager:info("[nms_task_control] get 'EV_COLLECTOR_HEARTBEAT' event!~n", []),
+            lager:info("[TaskControl] get 'EV_COLLECTOR_HEARTBEAT' event!~n", []),
 
             CollectorID_ = rfc4627:get_field(JsonObj, "collectorid", undefined),
             lager:info("  -->  CollectorID = ~p~n", [CollectorID_]),
@@ -3457,16 +3481,16 @@ collector_heartbeat_proc(JsonObj, RedisTask, _MySQLTask) ->
             %% 此操作存在冗余，后续待优化
             case gen_server:call(RedisTask, {add_collectorid, CollectorID}, infinity) of
                 {error, CollectorHBErr0} ->
-                    lager:warning("[nms_task_control] 'SADD collector ~p' -- Failed! Error '~p'~n", 
+                    lager:warning("[TaskControl] 'SADD collector ~p' -- Failed! Error '~p'~n", 
                         [CollectorID, CollectorHBErr0]);
                 {ok, _} ->
-                    lager:info("[nms_task_control] 'SADD collector ~p' -- Success!~n", [CollectorID])
+                    lager:info("[TaskControl] 'SADD collector ~p' -- Success!~n", [CollectorID])
             end,            
 
             io:format("", []);
 
         OtherEvent     ->
-            lager:info("[nms_task_control] get '~p' event, do nothing!~n", [OtherEvent])
+            lager:info("[TaskControl] get '~p' event, do nothing!~n", [OtherEvent])
     end.
 
 
@@ -3515,11 +3539,13 @@ init([TRef, MQTask, RedisTask, MySQLTask]) ->
     io:format("===>  nms_config:nms_task_control = [~p,~p]~n", [TRef, self()]),
     {ok, #state{tref=TRef, mq_task=MQTask, redis_task=RedisTask, mysql_task=MySQLTask}}.
 
-handle_call( {do_consume, QueueN}, _From, #state{mq_task=MQTask} = State) ->
-    _ = nms_rabbitmq_task:do_consume(MQTask, self(), QueueN),
-    lager:notice("[nms_task_control] handle_call/3 Recv {do_consume, ~p}~n", [QueueN]),
-    Reply = ok,
-    {reply, Reply, State};
+handle_call( {do_consume, QueueN, ExchangeN, RoutingKey}, 
+        _From, #state{mq_task=MQTask} = State) ->
+    nms_rabbitmq_task:do_consume(MQTask, self(), QueueN, ExchangeN, RoutingKey),
+    lager:notice("[TaskControl] handle_call/3 Recv {do_consume, ~p, ~p, ~p}~n", 
+        [QueueN, ExchangeN, RoutingKey]),
+    {reply, ok, State};
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -3550,28 +3576,28 @@ handle_info({timeout, TimerRef, {delete_collector_info, CollectorID}=Msg}, #stat
     %% 删除 Redis 的 SET 表 collector:collectorid:online
     case gen_server:call(RedisTask, {del_collector_online_device_all, CollectorID}, infinity) of
         {error, TimeOutErr0} ->
-            lager:warning("[nms_task_control] 'DEL collector:~p:online' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'DEL collector:~p:online' -- Failed! Error '~p'~n", 
                 [CollectorID, TimeOutErr0]);
         {ok, _} ->
-            lager:info("[nms_task_control] 'DEL collector:~p:online' -- Success!~n", [CollectorID])
+            lager:info("[TaskControl] 'DEL collector:~p:online' -- Success!~n", [CollectorID])
     end,
 
     %% 删除 Redis 的 HASH 表 collector:collectorid:timer
     case gen_server:call(RedisTask, {del_heartbeat_timer_by_collectorid, CollectorID}, infinity) of
         {error, TimeOutErr1} ->
-            lager:warning("[nms_task_control] 'DEL collector:~p:timer' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'DEL collector:~p:timer' -- Failed! Error '~p'~n", 
                 [CollectorID, TimeOutErr1]);
         {ok, _} ->
-            lager:info("[nms_task_control] 'DEL collector:~p:timer' -- Success!~n", [CollectorID])
+            lager:info("[TaskControl] 'DEL collector:~p:timer' -- Success!~n", [CollectorID])
     end,
 
     %% 删除 Redis 的 SET 表 collector 中的 collectorid
     case gen_server:call(RedisTask, {del_collectorid, CollectorID}, infinity) of
         {error, TimeOutErr2} ->
-            lager:warning("[nms_task_control] 'SREM collector ~p' -- Failed! Error '~p'~n", 
+            lager:warning("[TaskControl] 'SREM collector ~p' -- Failed! Error '~p'~n", 
                 [CollectorID, TimeOutErr2]);
         {ok, _} ->
-            lager:info("[nms_task_control] 'SREM collector ~p' -- Success!~n", [CollectorID])
+            lager:info("[TaskControl] 'SREM collector ~p' -- Success!~n", [CollectorID])
     end,
 
     {noreply, State};

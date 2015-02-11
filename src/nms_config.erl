@@ -1,3 +1,17 @@
+%% Copyright (c) 2014-2015, Moooofly <http://my.oschina.net/moooofly/blog>
+%%
+%% Permission to use, copy, modify, and/or distribute this software for any
+%% purpose with or without fee is hereby granted, provided that the above
+%% copyright notice and this permission notice appear in all copies.
+%%
+%% THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+%% WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+%% MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+%% ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+%% WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+%% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 -module(nms_config).
 -behaviour(gen_server).
 
@@ -90,12 +104,8 @@ handle_info({'DOWN', MonitorRef, process, Pid, _}, State=#state{monitors=Monitor
     io:format("[nms_config] handle_info/2 recv DOWN message from ~p~n", [Pid]),
 
 	{_, Ref} = lists:keyfind({MonitorRef, Pid}, 1, Monitors),
-	case ets:delete(?TAB, {manager_control, Ref}) of
-		true ->
-		    true;
-		false ->
-		    true = ets:delete(?TAB, {task_control, Ref})
-	end,
+	ets:delete(?TAB, {manager_control, Ref}),
+	ets:delete(?TAB, {task_control, Ref}),
 
 	Monitors2 = lists:keydelete({MonitorRef, Pid}, 1, Monitors),
 	{noreply, State#state{monitors=Monitors2}};

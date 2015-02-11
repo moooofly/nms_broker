@@ -1,3 +1,17 @@
+%% Copyright (c) 2014-2015, Moooofly <http://my.oschina.net/moooofly/blog>
+%%
+%% Permission to use, copy, modify, and/or distribute this software for any
+%% purpose with or without fee is hereby granted, provided that the above
+%% copyright notice and this permission notice appear in all copies.
+%%
+%% THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+%% WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+%% MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+%% ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+%% WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+%% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 -module(nms_task_sup).
 
 -behaviour(supervisor).
@@ -7,7 +21,7 @@
 
 start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
     {ok, TSup} = supervisor:start_link(?MODULE, []),
-    io:format("[4] TSup=~p~n", [TSup]),
+    lager:info("[TaskSup] TaskSup Pid = ~p~n", [TSup]),
 
     if 
         MQArgs =/= none ->
@@ -16,10 +30,10 @@ start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
                                       {nms_rabbitmq_task, start_link, [MQArgs]},
                                       transient, brutal_kill, worker,
                                       [nms_rabbitmq_task]}),
-            io:format("[5] MQTask=~p~n", [MQTask]);
+            lager:info("[TaskSup] RabbitmqTask Pid = ~p~n", [MQTask]);
         true -> 
             MQTask = none,
-            io:format("[5] MQArgs is none, MQTask need not start~n")
+            lager:notice("[TaskSup] MQArgs is unavailable, RabbitmqTask need not to start!")
     end,
 
     if 
@@ -29,10 +43,10 @@ start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
                                       {nms_redis_task, start_link, [RedisArgs]},
                                       transient, brutal_kill, worker,
                                       [nms_redis_task]}),
-            io:format("[6] RedisTask=~p~n", [RedisTask]);
+            lager:info("[TaskSup] RedisTask Pid = ~p~n", [RedisTask]);
         true ->
             RedisTask = none,
-            io:format("[6] RedisArgs is none, RedisTask need not start~n")
+            lager:notice("[TaskSup] RedisArgs is unavailable, RedisTask need not to start!")
     end,
 
     if 
@@ -42,10 +56,10 @@ start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
                                 {nms_mysql_task, start_link, [TRef, MySQLArgs]},
                                 transient, brutal_kill, worker,
                                 [nms_mysql_task]}),
-            io:format("[7] MySQLTask=~p~n", [MySQLTask]);
+            lager:info("[TaskSup] MySQLTask Pid = ~p~n", [MySQLTask]);
         true ->
             MySQLTask = none,
-            io:format("[7] MySQLArgs is none, MySQLTask need not start~n")
+            lager:notice("[TaskSup] MySQLArgs is unavailable, MySQLTask need not to start!")
     end,
 
     {ok, TaskControl} = supervisor:start_child(
@@ -54,7 +68,7 @@ start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
                                    [TRef, MQTask, RedisTask, MySQLTask]},
                                transient, brutal_kill, worker,
                                [nms_task_control]}),
-    io:format("[8] TaskControl=~p~n", [TaskControl]),
+    lager:info("[TaskSup] TaskControl Pid = ~p~n", [TaskControl]),
     {ok, TSup, TaskControl}.
 
 %%---------------------------------------------------------------------------

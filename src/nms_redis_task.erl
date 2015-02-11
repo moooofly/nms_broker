@@ -1,14 +1,31 @@
--module(nms_redis_task).
+%% Copyright (c) 2014-2015, Moooofly <http://my.oschina.net/moooofly/blog>
+%%
+%% Permission to use, copy, modify, and/or distribute this software for any
+%% purpose with or without fee is hereby granted, provided that the above
+%% copyright notice and this permission notice appear in all copies.
+%%
+%% THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+%% WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+%% MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+%% ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+%% WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+%% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+-module(nms_redis_task).
 -behaviour(gen_server).
+
+-export([init/1, 
+         terminate/2, 
+         code_change/3, 
+         handle_call/3, 
+         handle_cast/2,
+         handle_info/2]).
 
 -export([start_link/1]).
 
--export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
-         handle_info/2]).
-
 -record(state, {
-        redis_con = undefined 
+        redis_con = undefined :: undefined | pid()
     }).
 
 
@@ -17,7 +34,7 @@
 start_link(Args) when is_list(Args) ->
     gen_server:start_link(?MODULE, [Args], []);
 start_link(_) ->
-    io:format("Args must be proplists!Error!"),
+    lager:error("[RedisTask] Args must be proplists!Error!"),
     {error, args_not_list}.
 
 init([Args]) ->
@@ -28,11 +45,11 @@ init([Args]) ->
     ReconnectSleep = proplists:get_value(reconnect_sleep, Args, 100),
     case eredis:start_link(Host, Port, Database, Password, ReconnectSleep) of    
         {ok, RedisCon} ->
-            io:format("RedisCon Pid = ~p~n", [RedisCon]),
+            lager:info("[RedisTask] Connection Pid = ~p~n", [RedisCon]),
             {ok, #state{redis_con=RedisCon}};
-        {error, Reason} ->
-            io:format("[REDIS] connection_error Reason = ~p~n", [Reason]),
-            {stop, {connection_error, Reason}}
+        {error, ConnErr} ->
+            lager:info("[RedisTask] Connection Create Failed! Error '~p'~n", [ConnErr]),
+            {stop, {connection_error, ConnErr}}
     end.
 
 handle_call( {del_xmpp_in_all_domains, XmppDomainKey}, _From, #state{redis_con=RedisCon}=State ) ->
@@ -731,7 +748,6 @@ handle_call( {get_server_net_limit}, _From, #state{redis_con=RedisCon}=State ) -
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            %% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
             Result = system_set_handler:get_server_net_limit_redis(RedisCon),
             {reply, Result, State}
     end;
@@ -741,7 +757,6 @@ handle_call( {get_server_disk_limit}, _From, #state{redis_con=RedisCon}=State ) 
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            %% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
             Result = system_set_handler:get_server_disk_limit_redis(RedisCon),
             {reply, Result, State}
     end;
@@ -751,7 +766,6 @@ handle_call( {get_server_mem_limit}, _From, #state{redis_con=RedisCon}=State ) -
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            %% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
             Result = system_set_handler:get_server_mem_limit_redis(RedisCon),
             {reply, Result, State}
     end;
@@ -761,7 +775,6 @@ handle_call( {get_server_cpu_limit}, _From, #state{redis_con=RedisCon}=State ) -
         undefined ->
             {reply, {error, no_connection}, State};
         _ ->
-            %% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
             Result = system_set_handler:get_server_cpu_limit_redis(RedisCon),
             {reply, Result, State}
     end;

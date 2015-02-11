@@ -33,7 +33,7 @@
          get_all_physical_server/2,
          get_physical_server_count/2,
          get_physical_server_info_by_moid/2,
-         get_physical_server_info_by_guid/2,
+         get_physical_server_info_by_guid/2,     %% update
          get_physical_server_resource/2,
          get_physical_server_warning/2,
          get_physical_server_warning_count/2,
@@ -236,7 +236,7 @@ del_physical_server_online( RedisClient,DevMoid ) ->
 %% 返回值 : ServerList
 -spec get_all_physical_server(pid(),string()|binary()) -> list().		
 get_all_physical_server( RedisClient, DomainMoid ) ->
-    io:format("[get_all_physical_server]the domain id is:~p~n",[DomainMoid]),
+    lager:info("The domain id is:~p~n",[DomainMoid]),
 	Key = format_key_server( DomainMoid ),
 	{ok,ServerList} = eredis:q( RedisClient, ["SMEMBERS",Key] ),
 	ServerList.
@@ -245,7 +245,7 @@ get_all_physical_server( RedisClient, DomainMoid ) ->
 %% 返回值 : integer()
 -spec get_physical_server_count(pid(),string()|binary()) -> integer().		
 get_physical_server_count( RedisClient, DomainMoid ) ->
-    io:format("[get_physical_server_count]the domain id is:~p~n",[DomainMoid]),
+    lager:info("The domain id is:~p~n",[DomainMoid]),
 	Key = format_key_server( DomainMoid ),
 	{ok,Count} = eredis:q( RedisClient, ["SCARD",Key] ),
 	list_to_integer(binary_to_list(Count)).
@@ -254,37 +254,118 @@ get_physical_server_count( RedisClient, DomainMoid ) ->
 %% 返回值 : {error,<<"Key Error">>}|{Moid,Guid,DomainMoid,Name,Location,IP}
 -spec get_physical_server_info_by_moid(pid(),string()|binary()) -> {error,binary()}|{binary(),binary(),binary(),binary(),binary(),binary()}.
 get_physical_server_info_by_moid( RedisClient,DevMoid ) ->
-	Key = format_key_moid_info( DevMoid ),
-	case eredis:q(RedisClient,["HGETALL",Key]) of
+	KeyInfo = format_key_moid_info( DevMoid ),
+	case eredis:q(RedisClient,["HGETALL",KeyInfo]) of
 		{ok,[]} ->
 			{error,<<"Key Error">>};
-		{ok,[<<"moid">>,Moid,<<"guid">>,Guid,<<"domain_moid">>,DomainMoid,<<"name">>,Name,<<"location">>,Location,<<"ip">>,IP]} ->
+		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5]} ->
+			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5}],
+			{<<"moid">>,Moid}              = lists:keyfind(<<"moid">>,1,ValueList),
+			{<<"guid">>,Guid}              = lists:keyfind(<<"guid">>,1,ValueList),
+			{<<"domain_moid">>,DomainMoid} = lists:keyfind(<<"domain_moid">>,1,ValueList),
+			{<<"name">>,Name}              = lists:keyfind(<<"name">>,1,ValueList),
+			{<<"location">>,Location}      = lists:keyfind(<<"location">>,1,ValueList),
+			
+			{Moid,Guid,DomainMoid,Name,Location,<<"">>};
+		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5,Key6,Value6]} ->
+			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5},{Key6,Value6}],
+			{<<"moid">>,Moid}              = lists:keyfind(<<"moid">>,1,ValueList),
+			{<<"guid">>,Guid}              = lists:keyfind(<<"guid">>,1,ValueList),
+			{<<"domain_moid">>,DomainMoid} = lists:keyfind(<<"domain_moid">>,1,ValueList),
+			{<<"name">>,Name}              = lists:keyfind(<<"name">>,1,ValueList),
+			{<<"location">>,Location}      = lists:keyfind(<<"location">>,1,ValueList),
+			{<<"ip">>,IP}                  = lists:keyfind(<<"ip">>,1,ValueList),
+			
 			{Moid,Guid,DomainMoid,Name,Location,IP}
 	end.
 
 %% 根据guid获取指定物理服务器的入网信息(散列类型数据)
-%% 返回值 : {error,<<"Key Error">>}|{Moid,Guid,DomainMoid,Name,Location,IP}
+%% 返回值 : {error,<<"Key Non-Exist">>}|{Moid,Guid,DomainMoid,Name,Location,IP}
 -spec get_physical_server_info_by_guid(pid(),string()|binary()) -> {error,binary()}|{binary(),binary(),binary(),binary(),binary(),binary()}.
 get_physical_server_info_by_guid( RedisClient,DevGuid ) ->
-	Key = format_key_guid_info( DevGuid ),
-	case eredis:q(RedisClient,["HGETALL",Key]) of
+	KeyInfo = format_key_guid_info( DevGuid ),
+	case eredis:q(RedisClient,["HGETALL",KeyInfo]) of
 		{ok,[]} ->
-			{error,<<"Key Error">>};
-		{ok,[<<"moid">>,Moid,<<"guid">>,Guid,<<"domain_moid">>,DomainMoid,<<"name">>,Name,<<"location">>,Location,<<"ip">>,IP]} ->
+			{error,<<"Key Non-Exist">>};
+		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5]} ->
+			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5}],
+			{<<"moid">>,Moid}              = lists:keyfind(<<"moid">>,1,ValueList),
+			{<<"guid">>,Guid}              = lists:keyfind(<<"guid">>,1,ValueList),
+			{<<"domain_moid">>,DomainMoid} = lists:keyfind(<<"domain_moid">>,1,ValueList),
+			{<<"name">>,Name}              = lists:keyfind(<<"name">>,1,ValueList),
+			{<<"location">>,Location}      = lists:keyfind(<<"location">>,1,ValueList),
+			
+			{Moid,Guid,DomainMoid,Name,Location,<<"">>};
+		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5,Key6,Value6]} ->
+			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5},{Key6,Value6}],
+			{<<"moid">>,Moid}              = lists:keyfind(<<"moid">>,1,ValueList),
+			{<<"guid">>,Guid}              = lists:keyfind(<<"guid">>,1,ValueList),
+			{<<"domain_moid">>,DomainMoid} = lists:keyfind(<<"domain_moid">>,1,ValueList),
+			{<<"name">>,Name}              = lists:keyfind(<<"name">>,1,ValueList),
+			{<<"location">>,Location}      = lists:keyfind(<<"location">>,1,ValueList),
+			{<<"ip">>,IP}                  = lists:keyfind(<<"ip">>,1,ValueList),
+			
 			{Moid,Guid,DomainMoid,Name,Location,IP}
 	end.
 
 %% 获取指定物理服务器的资源使用情况(散列类型数据)
-%% 返回值 : {error,<<"Key Error">>}|{CPU,DISK,Memory,PortIn,PortOut}
--spec get_physical_server_resource(pid(),string()|binary()) -> {error,binary()}|{binary(),binary(),binary(),binary(),binary()}.	
+%% 返回值 : {CPU,DISK,Memory,PortIn,PortOut}
+-spec get_physical_server_resource(pid(),string()|binary()) -> {binary(),binary(),binary(),binary(),binary()}.	
 get_physical_server_resource( RedisClient, DevMoid ) ->
-	Key = format_key_resource( DevMoid ),
-	case eredis:q(RedisClient,["HGETALL",Key]) of
-		{ok,[]} ->
-			{error,<<"Key Error">>};
-		{ok,[<<"cpu">>,CPU,<<"disk">>,DISK,<<"memory">>,Memory,<<"portin">>,PortIn,<<"portout">>,PortOut]} ->
-			{CPU,DISK,Memory,PortIn,PortOut}
-	end.
+	KeyResource = format_key_resource( DevMoid ),
+	ValueList = case eredis:q(RedisClient,["HGETALL",KeyResource]) of
+					{ok,[]} ->
+						[];
+					{ok,[Key1,Value1]} ->
+						[{Key1,Value1}];
+					{ok,[Key1,Value1,Key2,Value2]} ->
+						[{Key1,Value1},{Key2,Value2}];
+					{ok,[Key1,Value1,Key2,Value2,Key3,Value3]} ->
+						[{Key1,Value1},{Key2,Value2},{Key3,Value3}];
+					{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4]} ->
+						[{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4}];
+					{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5]} ->
+						[{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5}]
+				end,
+
+	CpuResult     = lists:keyfind(<<"cpu">>,1,ValueList),
+	DiskResult    = lists:keyfind(<<"disk">>,1,ValueList),
+	MemoryResult  = lists:keyfind(<<"memory">>,1,ValueList),
+	PortInResult  = lists:keyfind(<<"portin">>,1,ValueList),
+	PortOutResult = lists:keyfind(<<"portout">>,1,ValueList),
+
+	CPU = case CpuResult of
+			false ->
+				0;
+			{<<"cpu">>,CpuValue} ->
+				CpuValue
+		  end,
+	DISK = case DiskResult of
+				false ->
+					0;
+				{<<"disk">>,DiskValue} ->
+					DiskValue
+		   end,
+	Memory = case MemoryResult of
+				false ->
+					0;
+				{<<"memory">>,MemoryValue} ->
+					MemoryValue
+		     end,
+	PortIn = case PortInResult of
+				false ->
+					0;
+				{<<"portin">>,PortInValue} ->
+					PortInValue
+		     end,
+	PortOut = case PortOutResult of
+				false ->
+					0;
+				{<<"portout">>,PortOutValue} ->
+					PortOutValue
+		      end,
+
+	{CPU,DISK,Memory,PortIn,PortOut}.
 
 %% 获取指定物理服务器的所有告警码(集合类型数据)
 %% 返回值 : CodeList

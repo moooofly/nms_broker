@@ -397,9 +397,8 @@ get_all_warning_code() ->
 get_warning_code_detail(PoolId, Code) ->
 	SQL = "SELECT * FROM warning_code WHERE code="++integer_to_list(Code)++";",
 	lager:info("The SQL is : ~p~n",[SQL]),
-	{result_packet,_,_,Row,_}= emysql:execute(PoolId,list_to_binary(SQL)),
-	lager:debug("The Result is : ~p~n",[Row]),
-	[Value] = Row,
+	{result_packet,_,_,Value,_}= emysql:execute(PoolId,list_to_binary(SQL)),
+	lager:info("The Value is : ~p~n",[Value]),
 	Value.
 
 %% 获取指定域下的所有订阅的服务器告警

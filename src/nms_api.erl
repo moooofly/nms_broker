@@ -1,3 +1,17 @@
+%% Copyright (c) 2014-2015, Moooofly <http://my.oschina.net/moooofly/blog>
+%%
+%% Permission to use, copy, modify, and/or distribute this software for any
+%% purpose with or without fee is hereby granted, provided that the above
+%% copyright notice and this permission notice appear in all copies.
+%%
+%% THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+%% WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+%% MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+%% ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+%% WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+%% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 -module(nms_api).
 
 -include("nms_broker.hrl").
@@ -7,7 +21,7 @@
 -export([start_task_group_only/2]).
 -export([start_task/1]).
 
--export([consume/2]).
+-export([consume/4]).
 -export([to_binary/1]).
 -export([gen_object_name/0]).
 
@@ -15,11 +29,9 @@
 -type ref() :: any().
 -export_type([ref/0]).
 
-
--spec start_default(ref()) -> {ok, pid()} | {error, badarg}.
-%% 
 %% MRef -> 用于标识以 nms_manager_sup 作为根的监督树结构
 %% 
+-spec start_default(ref()) -> {ok, pid()} | {error, badarg}.
 start_default(MRef) ->
     ensure_started(),
     {ok, _MSup, ManControl} = nms_broker_sup:start_manager_sup(child_spec(MRef)),
@@ -63,11 +75,11 @@ start_task_group_only(MRef, #args{} = Args) ->
 %% 通过该函数可以直接向 nms_task_control 进程发送待执行命令
 %% 由于底层 rabbitmq 要求 queue 的名字必须为二进制字符串，故此处做必要转换
 %% 
-consume(TaskCon, QueueN) when is_pid(TaskCon) ->
-    nms_task_control:do_consume(TaskCon, to_binary(QueueN));
-consume(TRef, QueueN) ->
+consume(TaskCon, QueueN, ExchangeN, RoutingKey) when is_pid(TaskCon) ->
+    nms_task_control:do_consume(TaskCon, to_binary(QueueN), to_binary(ExchangeN), to_binary(RoutingKey));
+consume(TRef, QueueN, ExchangeN, RoutingKey) ->
     TaskCon = nms_config:get_task_control(TRef),
-    nms_task_control:do_consume(TaskCon, to_binary(QueueN)).
+    nms_task_control:do_consume(TaskCon, to_binary(QueueN), to_binary(ExchangeN), to_binary(RoutingKey)).
 
 
 
