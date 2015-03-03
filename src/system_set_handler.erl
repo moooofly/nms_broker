@@ -215,22 +215,21 @@ update_server_cpu_limit( RedisClient,Limit,PoolId ) ->
 			end
 	end.
 
-%% 从 Redis 获取服务器 CPU 阈值
-%% redis 表格为字符串类型数据
--spec get_server_cpu_limit_redis(pid()) -> binary()|undefined.
+%% 从 Redis 的 STRING 表中获取服务器 Cpu 阈值
+%% 返回值 {ok, return_value()} | {error, no_connection}
+-spec get_server_cpu_limit_redis(pid()) -> {ok, binary() | undefined} | {error, no_connection}.
 get_server_cpu_limit_redis(RedisClient) ->
 	%% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
 	Result = eredis:q(RedisClient,["GET","server_cpu_limit"]),
 	Result.
 
-%% 从 MySQL 获取服务器 CPU 阈值
+%% 从 MySQL 获取服务器 Cpu 阈值
 -spec get_server_cpu_limit_mysql(atom()) -> {ok,binary()}|{error,string()}.
 get_server_cpu_limit_mysql(PoolId) ->
 	SQL = "SELECT s_cpu FROM resource_limit;",
 	lager:info("The SQL is : ~p~n",[SQL]),
-	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	lager:debug("The Result is : ~p~n",[Row]),
-	[[Value]] = Row,
+	{result_packet,_,_,Value,_} = emysql:execute(PoolId,list_to_binary(SQL)),
+	lager:info("The Value is : ~p~n",[Value]),
 	Value.
 
 %% 获取服务器 CPU 阈值
@@ -350,9 +349,7 @@ update_server_disk_limit( RedisClient,Limit,PoolId ) ->
 			end
 	end.
 
-
-%% 从 Redis 获取服务器 Disk 阈值
-%% redis 表格为字符串类型数据
+%% 从 Redis 的 STRING 表中获取服务器 Disk 阈值
 -spec get_server_disk_limit_redis(pid()) -> binary()|undefined.
 get_server_disk_limit_redis(RedisClient) ->
 	%% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
@@ -364,9 +361,8 @@ get_server_disk_limit_redis(RedisClient) ->
 get_server_disk_limit_mysql(PoolId) ->
 	SQL = "SELECT s_disk FROM resource_limit;",
 	lager:info("The SQL is : ~p~n",[SQL]),
-	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	lager:debug("The Result is : ~p~n",[Row]),
-	[[Value]] = Row,
+	{result_packet,_,_,Value,_} = emysql:execute(PoolId,list_to_binary(SQL)),
+	lager:debug("The Result is : ~p~n",[Value]),
 	Value.
 
 %% 获取服务器 Disk 阈值
@@ -421,8 +417,7 @@ update_server_net_limit( RedisClient,Limit,PoolId ) ->
 	end.
 
 
-%% 从 Redis 获取服务器 网口吞吐量 阈值
-%% redis 表格为字符串类型数据
+%% 从 Redis 的 STRING 表中获取服务器 网口吞吐量 阈值
 -spec get_server_net_limit_redis(pid()) -> binary()|undefined.
 get_server_net_limit_redis(RedisClient) ->
 	%% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
@@ -434,9 +429,8 @@ get_server_net_limit_redis(RedisClient) ->
 get_server_net_limit_mysql(PoolId) ->
 	SQL = "SELECT s_port FROM resource_limit;",
 	lager:info("The SQL is : ~p~n",[SQL]),
-	{result_packet,_,_,Row,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	lager:debug("The Result is : ~p~n",[Row]),
-	[[Value]] = Row,
+	{result_packet,_,_,Value,_} = emysql:execute(PoolId,list_to_binary(SQL)),
+	lager:debug("The Result is : ~p~n",[Value]),
 	Value.
 	
 %% 获取服务器 网口吞吐量 阈值

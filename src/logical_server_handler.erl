@@ -252,16 +252,30 @@ get_logic_server_info_by_moid( RedisClient, DevMoid ) ->
 	case eredis:q(RedisClient,["HGETALL",KeyInfo]) of
 		{ok,[]} ->
 			{error,<<"Key Error">>};
+		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5,Key6,Value6]} ->
+			
+			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3}
+			            ,{Key4,Value4},{Key5,Value5},{Key6,Value6}],
+			{<<"moid">>,Moid}                 = lists:keyfind(<<"moid">>,1,ValueList),
+			{<<"guid">>,Guid}                 = lists:keyfind(<<"guid">>,1,ValueList),
+			{<<"p_server_moid">>,PServerMoid} = lists:keyfind(<<"p_server_moid">>,1,ValueList),
+			{<<"domain_moid">>,DomainMoid}    = lists:keyfind(<<"domain_moid">>,1,ValueList),
+			{<<"name">>,Name}                 = lists:keyfind(<<"name">>,1,ValueList),
+			{<<"type">>,Type}                 = lists:keyfind(<<"type">>,1,ValueList),
+			
+			{ok, {Moid,Guid,PServerMoid,DomainMoid,Name,<<"">>,Type}};
+
 		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5,Key6,Value6,Key7,Value7]} ->
 			
-			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5},{Key6,Value6},{Key7,Value7}],
-			[{_,Moid}]        = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"moid">>],
-			[{_,Guid}]        = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"guid">>],
-			[{_,PServerMoid}] = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"p_server_moid">>],
-			[{_,DomainMoid}]  = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"domain_moid">>],
-			[{_,Name}]        = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"name">>],
-			[{_,IP}]          = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"ip">>],
-			[{_,Type}]        = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"type">>],
+			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3}
+			            ,{Key4,Value4},{Key5,Value5},{Key6,Value6},{Key7,Value7}],
+			{<<"moid">>,Moid}                 = lists:keyfind(<<"moid">>,1,ValueList),
+			{<<"guid">>,Guid}                 = lists:keyfind(<<"guid">>,1,ValueList),
+			{<<"p_server_moid">>,PServerMoid} = lists:keyfind(<<"p_server_moid">>,1,ValueList),
+			{<<"domain_moid">>,DomainMoid}    = lists:keyfind(<<"domain_moid">>,1,ValueList),
+			{<<"name">>,Name}                 = lists:keyfind(<<"name">>,1,ValueList),
+			{<<"ip">>,IP}                     = lists:keyfind(<<"ip">>,1,ValueList),
+			{<<"type">>,Type}                 = lists:keyfind(<<"type">>,1,ValueList),
 			
 			{ok, {Moid,Guid,PServerMoid,DomainMoid,Name,IP,Type}}
 	end.
@@ -274,16 +288,30 @@ get_logic_server_info_by_guid( RedisClient, DevGuid ) ->
 	case eredis:q(RedisClient,["HGETALL",KeyInfo]) of
 		{ok,[]} ->
 			{error,<<"Key Error">>};
+		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5,Key6,Value6]} ->
+			
+			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3}
+			            ,{Key4,Value4},{Key5,Value5},{Key6,Value6}],
+			{<<"moid">>,Moid}                 = lists:keyfind(<<"moid">>,1,ValueList),
+			{<<"guid">>,Guid}                 = lists:keyfind(<<"guid">>,1,ValueList),
+			{<<"p_server_moid">>,PServerMoid} = lists:keyfind(<<"p_server_moid">>,1,ValueList),
+			{<<"domain_moid">>,DomainMoid}    = lists:keyfind(<<"domain_moid">>,1,ValueList),
+			{<<"name">>,Name}                 = lists:keyfind(<<"name">>,1,ValueList),
+			{<<"type">>,Type}                 = lists:keyfind(<<"type">>,1,ValueList),
+			
+			{ok, {Moid,Guid,PServerMoid,DomainMoid,Name,<<"">>,Type}};
+			
 		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5,Key6,Value6,Key7,Value7]} ->
 			
-			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5},{Key6,Value6},{Key7,Value7}],
-			[{_,Moid}]        = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"moid">>],
-			[{_,Guid}]        = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"guid">>],
-			[{_,PServerMoid}] = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"p_server_moid">>],
-			[{_,DomainMoid}]  = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"domain_moid">>],
-			[{_,Name}]        = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"name">>],
-			[{_,IP}]          = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"ip">>],
-			[{_,Type}]        = [{Key,Value} || {Key,Value} <- ValueList, Key == <<"type">>],
+			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3}
+			            ,{Key4,Value4},{Key5,Value5},{Key6,Value6},{Key7,Value7}],
+			{<<"moid">>,Moid}                 = lists:keyfind(<<"moid">>,1,ValueList),
+			{<<"guid">>,Guid}                 = lists:keyfind(<<"guid">>,1,ValueList),
+			{<<"p_server_moid">>,PServerMoid} = lists:keyfind(<<"p_server_moid">>,1,ValueList),
+			{<<"domain_moid">>,DomainMoid}    = lists:keyfind(<<"domain_moid">>,1,ValueList),
+			{<<"name">>,Name}                 = lists:keyfind(<<"name">>,1,ValueList),
+			{<<"ip">>,IP}                     = lists:keyfind(<<"ip">>,1,ValueList),
+			{<<"type">>,Type}                 = lists:keyfind(<<"type">>,1,ValueList),
 			
 			{ok, {Moid,Guid,PServerMoid,DomainMoid,Name,IP,Type}}
 	end.

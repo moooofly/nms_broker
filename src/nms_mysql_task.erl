@@ -230,11 +230,10 @@ handle_call( {add_unrepaired_warning, DevMoid, DevType, DomainMoid, WarningCode,
         ok ->
             case warning_handler:add_unrepaired_warning(Pool#pool.pool_id, DevMoid, DevType, 
                         DomainMoid, WarningCode, Level, Description, StartTime) of
-                [] ->
-                    lager:warning("[MySQLTask] ###### have got no warning code information ######~n", []),
-                    {reply, [], State#state{status=on}};
-                Value ->
-                    {reply, Value, State#state{status=on}}
+                {ok,success} ->                    
+                    {reply, {ok,success}, State#state{status=on}};
+                {error, Error} ->
+                     {reply, {error, Error}, State#state{status=on}}
             end;            
         _ ->
             lager:warning("[MySQLTask] add_unrepaired_warning failed!~n", []),
@@ -250,7 +249,7 @@ handle_call( {get_warning_code_detail, WarningCode}, _From, #state{pool_info=Poo
                 [] ->
                     lager:warning("[MySQLTask] ###### have got no warning code information ######~n", []),
                     {reply, [], State#state{status=on}};
-                Value ->
+                [Value] ->
                     {reply, Value, State#state{status=on}}
             end;            
         _ ->
@@ -267,8 +266,8 @@ handle_call( {get_device_warning_by_code, DomainMoid, DevMoid, WarningCode},
             case warning_handler:get_device_warning_by_code(Pool#pool.pool_id, DomainMoid, DevMoid, WarningCode) of
                 [] ->
                     {reply, {non_exist, []}, State#state{status=on}};
-                [UnRepairedWarning] ->
-                    {reply, {exist, UnRepairedWarning}, State#state{status=on}}
+                [Value] ->
+                    {reply, {exist, Value}, State#state{status=on}}
             end;            
         _ ->
             lager:warning("[MySQLTask] get_device_warning_by_code failed!~n", []),

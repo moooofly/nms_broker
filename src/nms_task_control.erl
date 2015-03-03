@@ -36,7 +36,7 @@
 -define(CPU_THRESHOLD_DEFAULT,  <<"80">>).
 -define(MEM_THRESHOLD_DEFAULT,  <<"80">>).
 -define(DISK_THRESHOLD_DEFAULT, <<"80">>).
--define(NET_THRESHOLD_DEFAULT,  <<"60 * 1024 * 1024">>).  %% 需要确认单位
+-define(NET_THRESHOLD_DEFAULT,  <<"62914560">>).  %%  62914560 = 60 * 1024 * 1024
 
 -define(PAS_THRESHOLD_DEFAULT, 5000).   %% 接入数量
 -define(MTS_THRESHOLD_DEFAULT, 400).    %% 呼叫对数量
@@ -909,23 +909,35 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                                 StatisticTime}, infinity)
                     end || {obj, [{"cpucore"++N, Cpu}]} <- CoreInfo],
 
-
                     %% 查询保存服务器 CPU 阈值信息的表 resource_limit
                     Cpu_Threshold = case gen_server:call(RedisTask, {get_server_cpu_limit}, infinity) of
-                        {error, CpuErr1} ->
-                            lager:warning("[TaskControl] 'GET server_cpu_limit' -- Failed! Error '~p'~n", [CpuErr1]),
+                        {error, CpuErr1} ->  %% no_connection
+                            lager:warning("[TaskControl] 'GET get_server_cpu_limit' -- Failed! Error '~p'~n", [CpuErr1]),
                             case gen_server:call(MySQLTask, {get_server_cpu_limit}, infinity) of
-                                {ok, CpuValFromMySQL} ->
+                                {ok, []} ->
+                                    lager:warning("[TaskControl] 'SELECT s_cpu FROM resource_limit' -- Failed! 
+                                        Error 'Value not Set', Use ~p by default!~n", [?CPU_THRESHOLD_DEFAULT]),
+                                    ?CPU_THRESHOLD_DEFAULT;
+                                {ok, [CpuValFromMySQL]} ->
                                     lager:info("[TaskControl] 'SELECT s_cpu FROM resource_limit' -- Success! Value '~p'~n", 
                                         [CpuValFromMySQL]),
-                                    CpuValFromMySQL;
-                                _ ->
+                                    CpuValFromMySQL
+                            end;
+                        {ok, undefined} ->
+                            lager:warning("[TaskControl] 'GET get_server_cpu_limit' -- Failed! Error 'Key non-Exist'"),
+                            case gen_server:call(MySQLTask, {get_server_cpu_limit}, infinity) of
+                                {ok, []} ->
                                     lager:warning("[TaskControl] 'SELECT s_cpu FROM resource_limit' -- Failed! 
-                                        Use ~p by default!~n", [?CPU_THRESHOLD_DEFAULT]),
-                                    ?CPU_THRESHOLD_DEFAULT
+                                        Error 'Value not Set', Use ~p by default!~n", [?CPU_THRESHOLD_DEFAULT]),
+                                    ?CPU_THRESHOLD_DEFAULT;
+                                {ok, [CpuValFromMySQL]} ->
+                                    lager:info("[TaskControl] 'SELECT s_cpu FROM resource_limit' -- Success! Value '~p'~n", 
+                                        [CpuValFromMySQL]),
+                                    CpuValFromMySQL
                             end;
                         {ok, CpuValFromRedis} ->
-                            lager:info("[TaskControl] 'GET server_cpu_limit' -- Success! Value(~p)~n", [CpuValFromRedis]),
+                            lager:info("[TaskControl] 'GET get_server_cpu_limit' -- Success! Value(~p)~n", 
+                                [CpuValFromRedis]),
                             CpuValFromRedis
                     end,
                     
@@ -1075,22 +1087,35 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                             lager:warning("[TaskControl] 'INSERT INTO disk_statistic' -- Failed! Error '~p'~n", [DiskErr0])
                     end,
 
-                    %% 查询保存 Disk 阈值信息的表 resource_limit
+                    %% 查询保存服务器 Disk 阈值信息的表 resource_limit
                     Disk_Threshold = case gen_server:call(RedisTask, {get_server_disk_limit}, infinity) of
-                        {error, DiskErr1} ->
+                        {error, DiskErr1} ->  %% no_connection
                             lager:warning("[TaskControl] 'GET server_disk_limit' -- Failed! Error '~p'~n", [DiskErr1]),
                             case gen_server:call(MySQLTask, {get_server_disk_limit}, infinity) of
-                                {ok, DiskValFromMySQL} ->
+                                {ok, []} ->
+                                    lager:warning("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Failed! 
+                                        Error 'Value not Set', Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
+                                    ?DISK_THRESHOLD_DEFAULT;
+                                {ok, [DiskValFromMySQL]} ->
                                     lager:info("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
                                         [DiskValFromMySQL]),
-                                    DiskValFromMySQL;
-                                _ ->
+                                    DiskValFromMySQL
+                            end;
+                        {ok, undefined} ->
+                            lager:warning("[TaskControl] 'GET server_disk_limit' -- Failed! Error 'Key non-Exist'"),
+                            case gen_server:call(MySQLTask, {get_server_disk_limit}, infinity) of
+                                {ok, []} ->
                                     lager:warning("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Failed! 
-                                        Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
-                                    ?DISK_THRESHOLD_DEFAULT
+                                        Error 'Value not Set', Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
+                                    ?DISK_THRESHOLD_DEFAULT;
+                                {ok, [DiskValFromMySQL]} ->
+                                    lager:info("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
+                                        [DiskValFromMySQL]),
+                                    DiskValFromMySQL
                             end;
                         {ok, DiskValFromRedis} ->
-                            lager:info("[TaskControl] 'GET server_disk_limit' -- Success! Value(~p)~n", [DiskValFromRedis]),
+                            lager:info("[TaskControl] 'GET server_disk_limit' -- Success! Value(~p)~n", 
+                                [DiskValFromRedis]),
                             DiskValFromRedis
                     end,
 
@@ -1168,20 +1193,33 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
                     %% 查询 Redis 保存 发送/接收流量 阈值信息的表 resource_limit
                     Net_Threshold = case gen_server:call(RedisTask, {get_server_net_limit}, infinity) of
-                        {error, NetErr1} ->
+                        {error, NetErr1} ->  %% no_connection
                             lager:warning("[TaskControl] 'GET server_port_limit' -- Failed! Error '~p'~n", [NetErr1]),
                             case gen_server:call(MySQLTask, {get_server_net_limit}, infinity) of
-                                {ok, NetValFromMySQL} ->
+                                {ok, []} ->
+                                    lager:warning("[TaskControl] 'SELECT s_port FROM resource_limit' -- Failed! 
+                                        Error 'Value not Set', Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
+                                    ?NET_THRESHOLD_DEFAULT;
+                                {ok, [NetValFromMySQL]} ->
                                     lager:info("[TaskControl] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
                                         [NetValFromMySQL]),
-                                    NetValFromMySQL;
-                                _ ->
+                                    NetValFromMySQL
+                            end;
+                        {ok, undefined} ->
+                            lager:warning("[TaskControl] 'GET server_port_limit' -- Failed! Error 'Key non-Exist'"),
+                            case gen_server:call(MySQLTask, {get_server_net_limit}, infinity) of
+                                {ok, []} ->
                                     lager:warning("[TaskControl] 'SELECT s_port FROM resource_limit' -- Failed! 
-                                        Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
-                                    ?NET_THRESHOLD_DEFAULT
+                                        Error 'Value not Set', Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
+                                    ?NET_THRESHOLD_DEFAULT;
+                                {ok, [NetValFromMySQL]} ->
+                                    lager:info("[TaskControl] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
+                                        [NetValFromMySQL]),
+                                    NetValFromMySQL
                             end;
                         {ok, NetValFromRedis} ->
-                            lager:info("[TaskControl] 'GET server_port_limit' -- Success! Value(~p)~n", [NetValFromRedis]),
+                            lager:info("[TaskControl] 'GET server_port_limit' -- Success! Value(~p)~n", 
+                                [NetValFromRedis]),
                             NetValFromRedis
                     end,
 

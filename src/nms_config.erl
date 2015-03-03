@@ -99,7 +99,6 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Request, State) ->
 	{noreply, State}.
 
-
 handle_info({'DOWN', MonitorRef, process, Pid, _}, State=#state{monitors=Monitors}) ->
     io:format("[nms_config] handle_info/2 recv DOWN message from ~p~n", [Pid]),
 
@@ -109,6 +108,7 @@ handle_info({'DOWN', MonitorRef, process, Pid, _}, State=#state{monitors=Monitor
 
 	Monitors2 = lists:keydelete({MonitorRef, Pid}, 1, Monitors),
 	{noreply, State#state{monitors=Monitors2}};
+	
 handle_info(_Info, State) ->
 	{noreply, State}.
 
