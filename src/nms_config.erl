@@ -22,6 +22,15 @@
 -export([set_task_control/2]).
 -export([get_task_control/1]).
 
+-export([set_rabbitmq_task/2]).
+-export([get_rabbitmq_task/1]).
+
+-export([set_redis_task/2]).
+-export([get_redis_task/1]).
+
+-export([set_mysql_task/2]).
+-export([get_mysql_task/1]).
+
 %% gen_server.
 -export([init/1]).
 -export([handle_call/3]).
@@ -65,6 +74,40 @@ get_task_control(Ref) ->
 	io:format("ets:lookup_element(~p) => ~p~n", [Ref, P]),
 	P.
 
+-spec set_rabbitmq_task(nms_api:ref(), pid()) -> ok.
+set_rabbitmq_task(Ref, Pid) ->
+	true = gen_server:call(?MODULE, {set_rabbitmq_task, Ref, Pid}),
+	ok.
+
+-spec get_rabbitmq_task(nms_api:ref()) -> pid().
+get_rabbitmq_task(Ref) ->
+	P = ets:lookup_element(?TAB, {rabbitmq_task, Ref}, 2),
+	io:format("[nms_config] get rabbitmq task pid by Ref(~p) => ~p~n", [Ref, P]),
+	P.
+
+-spec set_redis_task(nms_api:ref(), pid()) -> ok.
+set_redis_task(Ref, Pid) ->
+	true = gen_server:call(?MODULE, {set_redis_task, Ref, Pid}),
+	ok.
+
+-spec get_redis_task(nms_api:ref()) -> pid().
+get_redis_task(Ref) ->
+	P = ets:lookup_element(?TAB, {redis_task, Ref}, 2),
+	io:format("[nms_config] get redis task pid by Ref(~p) => ~p~n", [Ref, P]),
+	P.
+
+-spec set_mysql_task(nms_api:ref(), pid()) -> ok.
+set_mysql_task(Ref, Pid) ->
+	true = gen_server:call(?MODULE, {set_mysql_task, Ref, Pid}),
+	ok.
+
+-spec get_mysql_task(nms_api:ref()) -> pid().
+get_mysql_task(Ref) ->
+	P = ets:lookup_element(?TAB, {mysql_task, Ref}, 2),
+	io:format("[nms_config] get mysql task pid by Ref(~p) => ~p~n", [Ref, P]),
+	P.
+
+
 
 init([]) ->
 	Monitors1 = [{{erlang:monitor(process, Pid), Pid}, Ref} ||
@@ -83,12 +126,40 @@ handle_call({set_manager_control, Ref, Pid}, _, State=#state{monitors=Monitors})
 		false ->
 			{reply, false, State}
 	end;
+
 handle_call({set_task_control, Ref, Pid}, _, State=#state{monitors=Monitors}) ->
 	case ets:insert_new(?TAB, {{task_control, Ref}, Pid}) of
 		true ->
 			MonitorRef = erlang:monitor(process, Pid),
 			{reply, true,
 				State#state{monitors=[{{MonitorRef, Pid}, Ref}|Monitors]}};
+		false ->
+			{reply, false, State}
+	end;
+
+handle_call({set_rabbitmq_task, Ref, Pid}, _, State) ->
+	%%case ets:insert_new(?TAB, {{rabbitmq_task, Ref}, Pid}) of
+	case ets:insert(?TAB, {{rabbitmq_task, Ref}, Pid}) of
+		true ->
+			{reply, true, State};
+		false ->
+			{reply, false, State}
+	end;
+
+handle_call({set_redis_task, Ref, Pid}, _, State) ->
+	%%case ets:insert_new(?TAB, {{redis_task, Ref}, Pid}) of
+	case ets:insert(?TAB, {{redis_task, Ref}, Pid}) of
+		true ->
+			{reply, true, State};
+		false ->
+			{reply, false, State}
+	end;
+
+handle_call({set_mysql_task, Ref, Pid}, _, State) ->
+	%%case ets:insert_new(?TAB, {{mysql_task, Ref}, Pid}) of
+	case ets:insert(?TAB, {{mysql_task, Ref}, Pid}) of
+		true ->
+			{reply, true, State};
 		false ->
 			{reply, false, State}
 	end;

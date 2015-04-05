@@ -30,6 +30,7 @@
         }).
 
 -record(state, {
+            tref      = undefined :: undefined | nms_api:ref(),
             pool_info = #pool{},
             status    = off :: off | on
     }).
@@ -92,6 +93,8 @@ initialize_pool_status(Pool, Status) ->
 %%--------------------------------------------------------------------------
 
 init([PoolId, Args]) ->
+    process_flag(trap_exit, true),
+
 %%    Size      = proplists:get_value(size, Args, 1),
 %%    User      = proplists:get_value(user, Args, "root"),
 %%    Password  = proplists:get_value(password, Args, "root"),
@@ -101,7 +104,6 @@ init([PoolId, Args]) ->
 %%    Encoding  = proplists:get_value(encoding, Args, utf8),
 %%    StartCmds = proplists:get_value(start_cmds, Args, []),
 %%    ConnectTimeout = proplists:get_value(connect_timeout, Args, infinity),
-
     Pool = #pool{pool_id=PoolId, options=Args},
 
 %%    lager:notice("~s~n", [string:chars($-,72)]),
@@ -121,7 +123,8 @@ init([PoolId, Args]) ->
 
     case catch ensure_emysql_started() of
         ok ->
-            {ok, #state{pool_info=Pool, status=off}};
+            nms_config:set_mysql_task(PoolId, self()),
+            {ok, #state{tref=PoolId, pool_info=Pool, status=off}};
         {error, Error} ->
             {stop, {emysql_startapp_error, Error}}
     end.    
@@ -402,10 +405,19 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info(_Info, State) ->
+
+handle_info({'EXIT', Pid, Info}, #state{tref=TRef}=State) ->
+    lager:warning("[MySQLTask] recv {'EXIT', ~p, ~p}~n", [Pid, Info]),
+    {noreply, State};
+
+handle_info(Info, State) ->
+    lager:notice("[MySQLTask] handle_info => Info(~p)~n", [Info]),
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(Reason, #state{tref=TRef}=_State) ->
+    lager:warning("[MySQLTask] terminate => Reason(~p)~n", [Reason]),
+    TaskConPid = nms_config:get_task_control(TRef),
+    exit(TaskConPid, {restart, from_mysql_task}),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->

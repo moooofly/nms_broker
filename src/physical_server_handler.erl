@@ -137,11 +137,29 @@ del_collector_online_device( RedisClient, CollectorID, DevGuid, DevType ) ->
 	Key = format_key_collector_online( CollectorID ),
 	eredis:q(RedisClient,["SREM",Key,DevType++":"++DevGuid]).
 
-%% 删除全部 collector 下属设备的在线信息(散列类型数据)
+
+%% 删除特定 collector 下属全部设备的在线信息
 %% 返回值 : 成功 {ok,<<"1">>} 
 -spec del_collector_online_device_all(pid(),string()) -> {ok,binary()}.
 del_collector_online_device_all( RedisClient, CollectorID ) ->
 	Key = format_key_collector_online( CollectorID ),
+	case eredis:q(RedisClient,["SMEMBERS",Key]) of
+		{ok, OnlineDevs} ->
+			Fun = fun(OnlineDev) ->
+					[DevType, DevMoid] = string:tokens(binary_to_list(OnlineDev), ":"),
+					Type = case nms_task_control:devtype_distinguish(list_to_binary(DevType)) of
+						{terminal, _} -> "terminal";
+						{logical, _}  -> "l_server";
+						{physical}    -> "p_server"
+					end,
+					lager:info("'DEL ~p'~n", [Type++":"++DevMoid++":online"]),
+					%% 删除各类型设备的 DevType:DevMoid:online 的内容
+					eredis:q(RedisClient,["DEL",Type++":"++DevMoid++":online"])
+			end,
+			lists:foreach(Fun, OnlineDevs);
+		Ret ->
+			lager:warning("'Error ~p' -- ~p~n", [Key, Ret])
+	end,
 	eredis:q(RedisClient,["DEL",Key]).
 
 %% 添加物理服务器的 IP 地址信息(散列类型数据)
@@ -280,33 +298,55 @@ get_physical_server_info_by_moid( RedisClient,DevMoid ) ->
 	end.
 
 %% 根据guid获取指定物理服务器的入网信息(散列类型数据)
-%% 返回值 : {error,<<"Key Non-Exist">>}|{Moid,Guid,DomainMoid,Name,Location,IP}
+%% 返回值 : {error,<<"Key Non-Exist">>}|{Moid,Guid,DomainMoid,Name,Type,Location,IP}
 -spec get_physical_server_info_by_guid(pid(),string()|binary()) -> {error,binary()}|{binary(),binary(),binary(),binary(),binary(),binary()}.
 get_physical_server_info_by_guid( RedisClient,DevGuid ) ->
 	KeyInfo = format_key_guid_info( DevGuid ),
-	case eredis:q(RedisClient,["HGETALL",KeyInfo]) of
-		{ok,[]} ->
-			{error,<<"Key Non-Exist">>};
-		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5]} ->
-			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5}],
-			{<<"moid">>,Moid}              = lists:keyfind(<<"moid">>,1,ValueList),
-			{<<"guid">>,Guid}              = lists:keyfind(<<"guid">>,1,ValueList),
-			{<<"domain_moid">>,DomainMoid} = lists:keyfind(<<"domain_moid">>,1,ValueList),
-			{<<"name">>,Name}              = lists:keyfind(<<"name">>,1,ValueList),
-			{<<"location">>,Location}      = lists:keyfind(<<"location">>,1,ValueList),
-			
-			{Moid,Guid,DomainMoid,Name,Location,<<"">>};
-		{ok,[Key1,Value1,Key2,Value2,Key3,Value3,Key4,Value4,Key5,Value5,Key6,Value6]} ->
-			ValueList = [{Key1,Value1},{Key2,Value2},{Key3,Value3},{Key4,Value4},{Key5,Value5},{Key6,Value6}],
-			{<<"moid">>,Moid}              = lists:keyfind(<<"moid">>,1,ValueList),
-			{<<"guid">>,Guid}              = lists:keyfind(<<"guid">>,1,ValueList),
-			{<<"domain_moid">>,DomainMoid} = lists:keyfind(<<"domain_moid">>,1,ValueList),
-			{<<"name">>,Name}              = lists:keyfind(<<"name">>,1,ValueList),
-			{<<"location">>,Location}      = lists:keyfind(<<"location">>,1,ValueList),
-			{<<"ip">>,IP}                  = lists:keyfind(<<"ip">>,1,ValueList),
-			
-			{Moid,Guid,DomainMoid,Name,Location,IP}
-	end.
+
+	Moid =  case eredis:q(RedisClient,["HGET",KeyInfo,"moid"]) of
+				{error, no_connection} -> <<"">>;
+				{ok, undefined}        -> <<"">>;
+				{ok, MoidValue}        -> MoidValue
+			end,
+
+	Guid =  case eredis:q(RedisClient,["HGET",KeyInfo,"guid"]) of
+				{error, no_connection} -> <<"">>;
+				{ok, undefined}        -> <<"">>;
+				{ok, GuidValue}        -> GuidValue
+			end,
+
+	DomainMoid = case eredis:q(RedisClient,["HGET",KeyInfo,"domain_moid"]) of
+				{error, no_connection} -> <<"">>;
+				{ok, undefined}        -> <<"">>;
+				{ok, DomainMoidValue}  -> DomainMoidValue
+			end,
+
+	Type =  case eredis:q(RedisClient,["HGET",KeyInfo,"type"]) of
+				{error, no_connection} -> <<"">>;
+				{ok, undefined}        -> <<"">>;
+				{ok, TypeValue}        -> TypeValue
+			end,
+
+	Name = case eredis:q(RedisClient,["HGET",KeyInfo,"name"]) of
+				{error, no_connection} -> <<"">>;
+				{ok, undefined}        -> <<"">>;
+				{ok, NameValue}        -> NameValue
+			end,
+
+	Location = case eredis:q(RedisClient,["HGET",KeyInfo,"location"]) of
+				{error, no_connection} -> <<"">>;
+				{ok, undefined}        -> <<"">>;
+				{ok, LocationValue}    -> LocationValue
+			end,
+
+	IP = case eredis:q(RedisClient,["HGET",KeyInfo,"ip"]) of
+				{error, no_connection} -> <<"">>;
+				{ok, undefined}        -> <<"">>;
+				{ok, IPValue}          -> IPValue
+			end,
+
+	{ok, {Moid,Guid,DomainMoid,Name,Type,Location,IP}}.
+
 
 %% 获取指定物理服务器的资源使用情况(散列类型数据)
 %% 返回值 : {CPU,DISK,Memory,PortIn,PortOut}

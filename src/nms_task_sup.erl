@@ -27,7 +27,7 @@ start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
         MQArgs =/= none ->
             {ok, MQTask}    = supervisor:start_child(
                                 TSup, {nms_rabbitmq_task,
-                                      {nms_rabbitmq_task, start_link, [MQArgs]},
+                                      {nms_rabbitmq_task, start_link, [TRef, MQArgs]},
                                       transient, brutal_kill, worker,
                                       [nms_rabbitmq_task]}),
             lager:info("[TaskSup] RabbitmqTask Pid = ~p~n", [MQTask]);
@@ -40,7 +40,7 @@ start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
         RedisArgs =/= none ->
             {ok, RedisTask} = supervisor:start_child(
                                 TSup, {nms_redis_task, 
-                                      {nms_redis_task, start_link, [RedisArgs]},
+                                      {nms_redis_task, start_link, [TRef, RedisArgs]},
                                       transient, brutal_kill, worker,
                                       [nms_redis_task]}),
             lager:info("[TaskSup] RedisTask Pid = ~p~n", [RedisTask]);
@@ -53,9 +53,9 @@ start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
         MySQLArgs =/= none ->
             {ok, MySQLTask} = supervisor:start_child(
                                 TSup, {nms_mysql_task,
-                                {nms_mysql_task, start_link, [TRef, MySQLArgs]},
-                                transient, brutal_kill, worker,
-                                [nms_mysql_task]}),
+                                      {nms_mysql_task, start_link, [TRef, MySQLArgs]},
+                                      transient, brutal_kill, worker,
+                                      [nms_mysql_task]}),
             lager:info("[TaskSup] MySQLTask Pid = ~p~n", [MySQLTask]);
         true ->
             MySQLTask = none,
@@ -76,4 +76,5 @@ start_link(TRef, MQArgs, RedisArgs, MySQLArgs) ->
 %%---------------------------------------------------------------------------
 
 init([]) ->
-    {ok, {{one_for_all, 0, 1}, []}}.
+    {ok, {{one_for_one, 10, 60}, []}}.
+

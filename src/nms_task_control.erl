@@ -21,15 +21,16 @@
 -export([start_link/4]).
 
 -export([do_consume/4]).
+-export([devtype_distinguish/1]).
 
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
          handle_info/2]).
 
 -record(state, {
-        tref       = undefined,
-		mq_task    = undefined,
-		redis_task = undefined,
-		mysql_task = undefined
+    		tref       = undefined :: undefined | nms_api:ref(), 
+    		mq_task    = undefined,
+    		redis_task = undefined,
+    		mysql_task = undefined
 	}).
 
 
@@ -78,6 +79,8 @@ do_consume(TaskConPid, QueueN, ExchangeN, RoutingKey) ->
 %% 区分设备类型（物理设备|逻辑设备|终端设备）
 devtype_distinguish(Devtype) ->
     String =    case Devtype of
+
+                    %% 5.0 之前的命名
 
                     %% 行业终端
                     <<"SERVICE_KDV_MT_KDV7620">>    -> {terminal, 'KDV7620'};
@@ -131,21 +134,6 @@ devtype_distinguish(Devtype) ->
                     <<"SERVICE_TS_MT_ANDROID_PHONE">>  -> {terminal, 'ANDROID_PHONE'};
                     <<"SERVICE_TS_MT_WINDOWS_PAD">>    -> {terminal, 'WINDOWS_PAD'};
 
-                    %% 5.0 新命名
-                    <<"Skywalker 100">>             ->{terminal, 'Skywalker 100'};
-                    <<"Skywalker X100">>            ->{terminal, 'Skywalker X100'};
-                    <<"Skywalker 300">>             ->{terminal, 'Skywalker 300'};
-                    <<"Skywalker X300">>            ->{terminal, 'Skywalker X300'};
-                    <<"Skywalker X500">>            ->{terminal, 'Skywalker X500'};
-                    <<"Skywalker X700">>            ->{terminal, 'Skywalker X700'};
-                    <<"Skywalker X900">>            ->{terminal, 'Skywalker X900'};
-                    <<"Skywalker for Windows">>     ->{terminal, 'Skywalker for Windows'};
-                    <<"Skywalker for iPhone">>      ->{terminal, 'Skywalker for iPhone'};
-                    <<"Skywalker for iPad">>        ->{terminal, 'Skywalker for iPad'};
-                    <<"Skywalker for Android">>     ->{terminal, 'Skywalker for Android'};
-                    <<"Skywalker for Mac">>         ->{terminal, 'Skywalker for Mac'};
-                    <<"Skywalker for Android TV">>  ->{terminal, 'Skywalker for Android TV'};
-
                     %% TS服务器
                     <<"SERVICE_TS_SRV_MPCD">>       -> {logical, 'MPCD'};
                     <<"SERVICE_TS_SRV_MCU">>        -> {logical, 'MCU'};
@@ -177,6 +165,25 @@ devtype_distinguish(Devtype) ->
                     <<"SERVICE_TS_SRV_XMPP">>       -> {logical, 'XMPP'};
                     <<"SERVICE_TS_SRV_TOMCAT">>     -> {logical, 'TOMCAT'};
 
+%% ---------------------------------------------------------------------------------------
+
+                    %% 5.0 新命名
+
+                    %% 终端
+                    <<"Skywalker 100">>             ->{terminal, 'Skywalker 100'};
+                    <<"Skywalker X100">>            ->{terminal, 'Skywalker X100'};
+                    <<"Skywalker 300">>             ->{terminal, 'Skywalker 300'};
+                    <<"Skywalker X300">>            ->{terminal, 'Skywalker X300'};
+                    <<"Skywalker X500">>            ->{terminal, 'Skywalker X500'};
+                    <<"Skywalker X700">>            ->{terminal, 'Skywalker X700'};
+                    <<"Skywalker X900">>            ->{terminal, 'Skywalker X900'};
+                    <<"Skywalker for Windows">>     ->{terminal, 'Skywalker for Windows'};
+                    <<"Skywalker for iPhone">>      ->{terminal, 'Skywalker for iPhone'};
+                    <<"Skywalker for iPad">>        ->{terminal, 'Skywalker for iPad'};
+                    <<"Skywalker for Android">>     ->{terminal, 'Skywalker for Android'};
+                    <<"Skywalker for Mac">>         ->{terminal, 'Skywalker for Mac'};
+                    <<"Skywalker for Android TV">>  ->{terminal, 'Skywalker for Android TV'};
+
                     %% 核心域服务
                     <<"BMC">>       -> {logical, 'BMC'};  %% Business Management Console
                     <<"AMC">>       -> {logical, 'AMC'};  %% Account Management Console
@@ -195,7 +202,7 @@ devtype_distinguish(Devtype) ->
                     <<"IVR">>       -> {logical, 'IVR'};    %% Interactive  Voice Response
                     <<"CMC">>       -> {logical, 'CMC'};    %% Conference Management Console
                     <<"TVS">>       -> {logical, 'TVS'};    %% TV-WALL Server
-                    <<"XMPP">>      -> {logical, 'XMPP'};   %% The Extensible Messaging and Presence Protocol
+                    <<"XNS">>       -> {logical, 'XNS'};    %% The Extensible Messaging and Presence Protocol
                     <<"SNS">>       -> {logical, 'SNS'};    %% Social Networking Services
                     <<"LGS">>       -> {logical, 'LGS'};    %% Log Server
                     <<"NTP">>       -> {logical, 'NTP'};    %% Network Time Protocol
@@ -205,9 +212,18 @@ devtype_distinguish(Devtype) ->
                     <<"NDS">>       -> {logical, 'NDS'};    %% Network Detect Server
                     <<"LBS">>       -> {logical, 'LBS'};    %% Load Balance Server
                     <<"DRM">>       -> {logical, 'DRM'};    %% Dynamic Resource Management
+                    <<"MODB">>      -> {logical, 'MODB'};   %% MODB
+
                     <<"ZK">>        -> {logical, 'ZK'};     %% Zookeeper
                     <<"MQ">>        -> {logical, 'MQ'};     %% MQ
                     <<"REDIS">>     -> {logical, 'REDIS'};  %% REDIS
+                    <<"MYSQL">>     -> {logical, 'MYSQL'};  %% MYSQL
+                    <<"HAPROXY">>   -> {logical, 'HAPROXY'};%% HAPROXY
+                    <<"NGINX">>     -> {logical, 'NGINX'};  %% NGINX
+                    <<"MEM">>       -> {logical, 'MEM'};    %% MEMCACHED
+                    <<"GFS">>       -> {logical, 'GFS'};    %% GFS
+                    <<"KEEPALIVE">> -> {logical, 'KEEPALIVE'}; %% KEEPALIVED
+                    <<"XMPP">>      -> {logical, 'XMPP'};   %% The Extensible Messaging and Presence Protocol
 
                     %% 机框
                     <<"UMU">>       -> {logical, 'UMU'};   %% Unified Management Unit
@@ -233,7 +249,6 @@ devtype_distinguish(Devtype) ->
                     _                               -> crash_me_for_unknown_devtype
                 end,
     String.
-
 
 to_description(Code) when is_integer(Code) ->
     Desc = case Code of
@@ -495,7 +510,7 @@ update_redis_warning_info(WarningTriggered,RedisTask,DevMoid,DevType,WarningCode
                 [Action, Tag, DevMoid, WarningCode]);  
         {error, Err} ->
             lager:warning("[TaskControl] '~p ~p:~p:warning xx' -- Failed! Error '~p'~n", 
-                [DevMoid, Tag, Err])
+                [Action, Tag, DevMoid, Err])
     end,
 
     io:format("", []).
@@ -674,10 +689,6 @@ update_timer_by_collectorid(RedisTask, CollectorID) ->
 
 physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
-    DevGuid_ = rfc4627:get_field(JsonObj, "devid", undefined),
-    lager:info("  -->  DevGuid = ~p~n", [DevGuid_]),
-    DevGuid = binary_to_list(DevGuid_),
-
     %% rpttime 格式     year-month-day/hour:min:sec
     %% rpttime 格式变更 year/month/day:hour:min:sec
     StatisticTime_ = rfc4627:get_field(JsonObj, "rpttime", undefined),
@@ -696,12 +707,18 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
     EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
     lager:info("  -->  EventID = ~p~n", [EventID]),
 
+    DevGuidFromMsg_ = rfc4627:get_field(JsonObj, "devid", undefined),
+    lager:info("  -->  Physical Device Guid (Msg) = ~p~n", [DevGuidFromMsg_]),
+    DevGuidFromMsg = binary_to_list(DevGuidFromMsg_),
+
     %% 通过 "devid" 在 redis 表 p_server:devid:info 中查询当前物理设备相关信息
-    case gen_server:call(RedisTask, {get_physical_server_info_by_guid, DevGuid_}, infinity) of
-        { ok, {DevMoid_, DevGuid_, DomainMoid_, DevName, Location, IP} } ->
-            lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
-            lager:info("  -->  DomainMoid = ~p~n", [DomainMoid_]),
-            lager:info("  -->  DevName = ~p~n", [DevName]),
+    case gen_server:call(RedisTask, {get_physical_server_info_by_guid, DevGuidFromMsg_}, infinity) of
+        { ok, {DevMoid_, DevGuid_, DomainMoid_, DevName, DevTypeFromRedis_, Location, IP} } ->
+            lager:info("  -->  Physical Device Guid (Redis) = ~p~n", [DevGuid_]),
+            lager:info("  -->  Physical Device Moid = ~p~n", [DevMoid_]),
+            lager:info("  -->  Platform Domain Moid = ~p~n", [DomainMoid_]),
+            lager:info("  -->  Physical Device Name = ~p~n", [DevName]),
+            lager:info("  -->  Physical Device Type (Redis) = ~p~n", [DevTypeFromRedis_]),
             lager:info("  -->  Location = ~ts~n", [Location]),
             lager:info("  -->  IP = ~p~n", [IP]),
 
@@ -710,6 +727,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
 
             DevType_ = rfc4627:get_field(JsonObj, "devtype", undefined),
             DevType = binary_to_list(DevType_),
+            lager:info("  -->  Physical Device Type (Msg) = ~p~n", [DevType_]),
 
             %% 通过 "eventid" 判定为信息类型
             case EventID of
@@ -808,14 +826,14 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                             lager:info("[TaskControl] 'SADD collector ~p' -- Success!~n", [CollectorID])
                     end,
 
-                    %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
-                    case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
+                    %% 向 redis 表 collector:collectorid:online 中写入 devtype:devmoid 信息
+                    case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, PhyDevOnlineErr2} ->
                             lager:warning("[TaskControl] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, PhyDevOnlineErr2]);
                         {ok, _} ->
                             lager:info("[TaskControl] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
-                                [CollectorID, DevType, DevGuid])
+                                [CollectorID, DevType, DevMoid])
                     end,
                     io:format("", []);
 
@@ -859,14 +877,14 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                             lager:info("[TaskControl] 'DEL p_server:~p:warning' -- Success!~n", [DevMoid])
                     end,
 
-                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
-                    case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
+                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devmoid 信息
+                    case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, PhyDevOnlineErr3} ->
                             lager:warning("[TaskControl] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, PhyDevOnlineErr3]);
                         {ok, _} ->
                             lager:info("[TaskControl] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
-                                [CollectorID, DevType, DevGuid])
+                                [CollectorID, DevType, DevMoid])
                     end,
                     io:format("", []);
 
@@ -918,7 +936,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                                     lager:warning("[TaskControl] 'SELECT s_cpu FROM resource_limit' -- Failed! 
                                         Error 'Value not Set', Use ~p by default!~n", [?CPU_THRESHOLD_DEFAULT]),
                                     ?CPU_THRESHOLD_DEFAULT;
-                                {ok, [CpuValFromMySQL]} ->
+                                {ok, [[CpuValFromMySQL]]} ->
                                     lager:info("[TaskControl] 'SELECT s_cpu FROM resource_limit' -- Success! Value '~p'~n", 
                                         [CpuValFromMySQL]),
                                     CpuValFromMySQL
@@ -938,14 +956,14 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                         {ok, CpuValFromRedis} ->
                             lager:info("[TaskControl] 'GET get_server_cpu_limit' -- Success! Value(~p)~n", 
                                 [CpuValFromRedis]),
-                            CpuValFromRedis
+                            list_to_integer(binary_to_list(CpuValFromRedis))
                     end,
                     
                     CpuPctList = [ Pct || {obj, [{_, Pct}]} <- CoreInfo],
 
                     %% 判定当前多核 CPU 的单核使用率是否触发告警状态
                     Predicate = fun(V) -> 
-                                    V >= list_to_integer(binary_to_list(Cpu_Threshold))
+                                    V >= Cpu_Threshold
                                 end,
                     CpuWarningTriggered = lists:any(Predicate, CpuPctList),
 
@@ -1011,7 +1029,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                                     lager:warning("[TaskControl] 'SELECT s_memory FROM resource_limit' -- Failed! 
                                         Error 'Value not Set', Use ~p by default!~n", [?MEM_THRESHOLD_DEFAULT]),
                                     ?MEM_THRESHOLD_DEFAULT;
-                                {ok, [MemValFromMySQL]} ->
+                                {ok, [[MemValFromMySQL]]} ->
                                     lager:info("[TaskControl] 'SELECT s_memory FROM resource_limit' -- Success! Value '~p'~n", 
                                         [MemValFromMySQL]),
                                     MemValFromMySQL
@@ -1023,7 +1041,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                                     lager:warning("[TaskControl] 'SELECT s_memory FROM resource_limit' -- Failed! 
                                         Error 'Value not Set', Use ~p by default!~n", [?MEM_THRESHOLD_DEFAULT]),
                                     ?MEM_THRESHOLD_DEFAULT;
-                                {ok, [MemValFromMySQL]} ->
+                                {ok, [[MemValFromMySQL]]} ->
                                     lager:info("[TaskControl] 'SELECT s_memory FROM resource_limit' -- Success! Value '~p'~n", 
                                         [MemValFromMySQL]),
                                     MemValFromMySQL
@@ -1031,11 +1049,11 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                         {ok, MemValFromRedis} ->
                             lager:info("[TaskControl] 'GET server_memory_limit' -- Success! Value(~p)~n", 
                                 [MemValFromRedis]),
-                            MemValFromRedis
+                            list_to_integer(binary_to_list(MemValFromRedis))
                     end,
 
                     %% 判定当前 MEM 使用率是否触发告警状态
-                    MemWarningTriggered = MemUsePct >= list_to_integer(binary_to_list(Mem_Threshold)),
+                    MemWarningTriggered = MemUsePct >= Mem_Threshold,
 
         %% ------------------------------------------------------------
                     %% 未处理失败
@@ -1096,7 +1114,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                                     lager:warning("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Failed! 
                                         Error 'Value not Set', Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
                                     ?DISK_THRESHOLD_DEFAULT;
-                                {ok, [DiskValFromMySQL]} ->
+                                {ok, [[DiskValFromMySQL]]} ->
                                     lager:info("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
                                         [DiskValFromMySQL]),
                                     DiskValFromMySQL
@@ -1108,7 +1126,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                                     lager:warning("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Failed! 
                                         Error 'Value not Set', Use ~p by default!~n", [?DISK_THRESHOLD_DEFAULT]),
                                     ?DISK_THRESHOLD_DEFAULT;
-                                {ok, [DiskValFromMySQL]} ->
+                                {ok, [[DiskValFromMySQL]]} ->
                                     lager:info("[TaskControl] 'SELECT s_disk FROM resource_limit' -- Success! Value '~p'~n", 
                                         [DiskValFromMySQL]),
                                     DiskValFromMySQL
@@ -1116,11 +1134,11 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                         {ok, DiskValFromRedis} ->
                             lager:info("[TaskControl] 'GET server_disk_limit' -- Success! Value(~p)~n", 
                                 [DiskValFromRedis]),
-                            DiskValFromRedis
+                            list_to_integer(binary_to_list(DiskValFromRedis))
                     end,
 
                     %% 判定当前 Disk 使用率是否触发告警状态
-                    DiskWarningTriggered = DiskUsePct >= list_to_integer(binary_to_list(Disk_Threshold)),
+                    DiskWarningTriggered = DiskUsePct >= Disk_Threshold,
 
         %% ------------------------------------------------------------
                     %% 未处理失败
@@ -1200,7 +1218,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                                     lager:warning("[TaskControl] 'SELECT s_port FROM resource_limit' -- Failed! 
                                         Error 'Value not Set', Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
                                     ?NET_THRESHOLD_DEFAULT;
-                                {ok, [NetValFromMySQL]} ->
+                                {ok, [[NetValFromMySQL]]} ->
                                     lager:info("[TaskControl] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
                                         [NetValFromMySQL]),
                                     NetValFromMySQL
@@ -1212,7 +1230,7 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                                     lager:warning("[TaskControl] 'SELECT s_port FROM resource_limit' -- Failed! 
                                         Error 'Value not Set', Use ~p by default!~n", [?NET_THRESHOLD_DEFAULT]),
                                     ?NET_THRESHOLD_DEFAULT;
-                                {ok, [NetValFromMySQL]} ->
+                                {ok, [[NetValFromMySQL]]} ->
                                     lager:info("[TaskControl] 'SELECT s_port FROM resource_limit' -- Success! Value '~p'~n", 
                                         [NetValFromMySQL]),
                                     NetValFromMySQL
@@ -1220,14 +1238,14 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
                         {ok, NetValFromRedis} ->
                             lager:info("[TaskControl] 'GET server_port_limit' -- Success! Value(~p)~n", 
                                 [NetValFromRedis]),
-                            NetValFromRedis
+                            list_to_integer(binary_to_list(NetValFromRedis))                            
                     end,
 
                     %% 判定当前多 NetCard 网卡设备上单 NetCard 流量是否触发告警状态 - 不区分收发
                     NetTrafficList_ = [ [S,R] || {obj,[{_,{obj,[{_,_},{"sendkbps",S},{"recvkbps",R}]}}]} <- Netcards],
                     NetTrafficList = lists:flatten(NetTrafficList_),
                     Predicate = fun(V) -> 
-                                    V >= list_to_integer(binary_to_list(Net_Threshold))
+                                    V >= Net_Threshold
                                 end,
                     NetTrafficWarningTriggered = lists:any(Predicate, NetTrafficList),
 
@@ -1292,13 +1310,13 @@ physical_device_proc(JsonObj, RedisTask, MySQLTask) ->
             end;
 
         {error,<<"Key Error">>} ->
-            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
-            throw(redis_key_error);
+            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p, can do nothing!~n", 
+                [DevGuidFromMsg]);
+            %%throw(redis_key_error);
         {error, no_connection} ->
             lager:error("[TaskControl] lost redis connection!"),
             throw(redis_connection_lost)
     end.
-
 
 logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
@@ -1319,23 +1337,31 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
     EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
     lager:info("  -->  EventID = ~p~n", [EventID]),
 
-    DevGuid_ = rfc4627:get_field(JsonObj, "devid", undefined),
-    lager:info("  -->  Logical Device Guid = ~p~n", [DevGuid_]),
-    DevGuid = binary_to_list(DevGuid_),
+    DevGuidFromMsg_ = rfc4627:get_field(JsonObj, "devid", undefined),
+    lager:info("  -->  Logical Device Guid (Msg) = ~p~n", [DevGuidFromMsg_]),
+    DevGuidFromMsg = binary_to_list(DevGuidFromMsg_),
 
     %% 通过 "devid" 在 redis 中查询当前逻辑设备所属的域 ID
-    case gen_server:call(RedisTask, {get_logic_server_info_by_guid, DevGuid_}, infinity) of
-        { ok, {DevMoid_, DevGuid_, PlatformDomainMoid_, DomainMoid_, DevName, IP, Type} } ->
-            lager:info("  -->  Logical Device Moid = ~p~n", [DevMoid_]),
-            lager:info("  -->  Platform Domain Moid = ~p~n", [PlatformDomainMoid_]),
-            lager:info("  -->  Service Domain Moid = ~p~n", [DomainMoid_]),
-            lager:info("  -->  Logical Device Name = ~p~n", [DevName]),
-            lager:info("  -->  Logical Device Type (Redis) = ~p~n", [Type]),
+    case gen_server:call(RedisTask, {get_logic_server_info_by_guid, DevGuidFromMsg_}, infinity) of
+        { ok, {DevMoid_, DevGuid_, PhyServerMoid_, PlatformDomainMoid_, DevName, IP, Type} } ->
+            lager:info("  -->  Logical Device Guid (Redis) = ~p~n", [DevGuid_]),
+            lager:info("  -->  Logical Server Moid = ~p~n", [DevMoid_]),
+            lager:info("  -->  Physical Server Moid = ~p~n", [PhyServerMoid_]),
+            lager:info("  -->  Platform Domain Moid = ~p~n", [PlatformDomainMoid_]),            
+            lager:info("  -->  Logical Server Name = ~p~n", [DevName]),
+            lager:info("  -->  Logical Server Type (Redis) = ~p~n", [Type]),
             lager:info("  -->  IP = ~p~n", [IP]),
 
             DevMoid = binary_to_list(DevMoid_),
             PlatformDomainMoid = binary_to_list(PlatformDomainMoid_),
-            DomainMoid = binary_to_list(DomainMoid_),
+
+            %% 通过逻辑服务器信息中的 PlatformDomainMoid 查其所属 ServiceDomainMoid
+            {ok, ServiceDomainMoid_} = 
+                gen_server:call(RedisTask, {get_service_by_platform, PlatformDomainMoid}, infinity),
+            lager:info("[TaskControl] 'HGET domain:~p:info parent_moid' -- Success!~n", [PlatformDomainMoid]),
+
+            lager:info("  -->  Service Domain Moid = ~p~n", [ServiceDomainMoid_]),
+            ServiceDomainMoid = binary_to_list(ServiceDomainMoid_),
 
             DevType_ = rfc4627:get_field(JsonObj, "devtype", undefined),
             DevType = binary_to_list(DevType_),
@@ -1374,14 +1400,14 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             lager:info("[TaskControl] 'SADD collector ~p' -- Success!~n", [CollectorID])
                     end,
 
-                    %% 向 redis 表 collector:collectorid:online 中写入 devtype:devid 信息
-                    case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
+                    %% 向 redis 表 collector:collectorid:online 中写入 devtype:devmoid 信息
+                    case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, LogDevOnlineErr2} ->
                             lager:warning("[TaskControl] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, LogDevOnlineErr2]);
                         {ok, _} ->
                             lager:info("[TaskControl] 'SADD collector:~p:online ~p:~p' -- Success!~n", 
-                                [CollectorID, DevType, DevGuid])
+                                [CollectorID, DevType, DevMoid])
                     end,
 
                     io:format("", []);
@@ -1426,14 +1452,14 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                             lager:info("[TaskControl] 'DEL l_server:~p:warning' -- Success!~n", [DevMoid])
                     end,
 
-                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
-                    case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevGuid, DevType}, infinity) of
+                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devmoid 信息
+                    case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, LogDevOfflineErr3} ->
                             lager:warning("[TaskControl] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
                                 [CollectorID, LogDevOfflineErr3]);
                         {ok, _} ->
                             lager:info("[TaskControl] 'SREM collector:~p:online ~p:~p' -- Success!~n", 
-                                [CollectorID, DevType, DevGuid])
+                                [CollectorID, DevType, DevMoid])
                     end,
 
                     case CustomType of
@@ -1448,9 +1474,9 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
                                     lager:info("[TaskControl] 'SREM pas_in_all_domains ~p' -- Success!~n", 
                                         [CompletePasDomainInfo])
                             end;
-                        'XMPP' ->
-                            %% 从 redis 的 SET 表 xmpp_in_all_domains 中删除 domain:DomainMoid:xmpp_online 字符串
-                            XmppDomainKey = "domain:" ++ DomainMoid ++ ":xmpp_online",
+                        'XNS'  ->   %% 原 'XMPP'
+                            %% 从 redis 的 SET 表 xmpp_in_all_domains 中删除 domain:ServiceDomainMoid:xmpp_online 字符串
+                            XmppDomainKey = "domain:" ++ ServiceDomainMoid ++ ":xmpp_online",
                             case gen_server:call(RedisTask, {del_xmpp_in_all_domains, XmppDomainKey}, infinity) of
                                 {error, LogDevOfflineErr5} ->
                                     lager:warning("[TaskControl] 'SREM xmpp_in_all_domains ~p' -- Failed! Error '~p'~n", 
@@ -1499,7 +1525,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -1508,18 +1534,18 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
 
-                    %% 向 redis 的 STRING 表 domain:DomainMoid:xmpp_online 中保存 XMPP 在线数
-                    case gen_server:call(RedisTask, {add_xmpp_online_statistic, DomainMoid, OnlineNum}, infinity) of
+                    %% 向 redis 的 STRING 表 domain:ServiceDomainMoid:xmpp_online 中保存 XMPP 在线数
+                    case gen_server:call(RedisTask, {add_xmpp_online_statistic, ServiceDomainMoid, OnlineNum}, infinity) of
                         {error, XmppInfoErr0} ->
                             lager:warning("[TaskControl] 'SET domain:~p:xmpp_online ~p' -- Failed! Error '~p'~n", 
-                                [DomainMoid, OnlineNum, XmppInfoErr0]);
+                                [ServiceDomainMoid, OnlineNum, XmppInfoErr0]);
                         {ok, _} ->
                             lager:info("[TaskControl] 'SET domain:~p:xmpp_online ~p' -- Success!~n", 
-                                [DomainMoid, OnlineNum])
+                                [ServiceDomainMoid, OnlineNum])
                     end,
 
-                    %% 向 redis 的 SET 表 xmpp_in_all_domains 中保存 domain:DomainMoid:xmpp_online 字符串
-                    XmppDomainKey = "domain:" ++ DomainMoid ++ ":xmpp_online",
+                    %% 向 redis 的 SET 表 xmpp_in_all_domains 中保存 domain:ServiceDomainMoid:xmpp_online 字符串
+                    XmppDomainKey = "domain:" ++ ServiceDomainMoid ++ ":xmpp_online",
                     case gen_server:call(RedisTask, {add_xmpp_in_all_domains, XmppDomainKey}, infinity) of
                         {error, XmppInfoErr1} ->
                             lager:warning("[TaskControl] 'SADD xmpp_in_all_domains ~p' -- Failed! Error '~p'~n", 
@@ -1561,7 +1587,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -1606,7 +1632,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -1650,7 +1676,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -1694,7 +1720,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -1738,7 +1764,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -2205,7 +2231,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -2255,7 +2281,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -2462,7 +2488,7 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
 
         %% ------------------------------------------------------------
                     %% 未处理失败
-                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,DomainMoid,
+                    update_mysql_warning_info(PidChangeTriggered,MySQLTask,DevMoid,ServiceDomainMoid,
                         ?L_SERVER,StatisticTime,EventID,2011), 
 
         %% ------------------------------------------------------------
@@ -2498,19 +2524,16 @@ logical_device_proc(JsonObj, RedisTask, MySQLTask, CustomType) ->
             end;
 
         {error,<<"Key Error">>} ->
-            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p~n", [DevGuid]),
-            throw(redis_key_error);
+            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p, can do nothing!~n", 
+                [DevGuidFromMsg]);
+            %%throw(redis_key_error);
 
         {error, no_connection} ->
             lager:error("[TaskControl] lost redis connection!"),
             throw(redis_connection_lost)
     end.
 
-
 terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
-    DevMoid_ = rfc4627:get_field(JsonObj, "devid", undefined),
-    lager:info("  -->  DevMoid = ~p~n", [DevMoid_]),
-    DevMoid = binary_to_list(DevMoid_),
 
     %% rpttime 格式 year-month-day/hour:min:sec
     StatisticTime_ = rfc4627:get_field(JsonObj, "rpttime", undefined),
@@ -2529,13 +2552,18 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
     EventID = rfc4627:get_field(JsonObj, "eventid", undefined),
     lager:info("  -->  EventID = ~p~n", [EventID]),
 
+    DevMoidFromMsg_ = rfc4627:get_field(JsonObj, "devid", undefined),
+    lager:info("  -->  Terminal Device Moid (Msg) = ~p~n", [DevMoidFromMsg_]),
+    DevMoidFromMsg = binary_to_list(DevMoidFromMsg_),
+
     %% 通过 "devid" 在 redis 中查询当前终端设备所属的域 ID
-    case gen_server:call(RedisTask, {get_terminal_base_info, DevMoid_}, infinity) of
+    case gen_server:call(RedisTask, {get_terminal_base_info, DevMoidFromMsg_}, infinity) of
         { ok, {DevMoid_, DomainMoid_, DevName_, E164_} } ->
 
-            lager:info("  -->  DomainMoid = ~p~n", [DomainMoid_]),
-            lager:info("  -->  DevName = ~p~n", [DevName_]),
-            lager:info("  -->  E164 = ~p~n", [E164_]),
+            lager:info("  -->  Terminal Device Moid (Redis) = ~p~n", [DomainMoid_]),
+            lager:info("  -->  Terminal Device PlatformDomain Moid = ~p~n", [DomainMoid_]),
+            lager:info("  -->  Terminal Device Name = ~p~n", [DevName_]),
+            lager:info("  -->  Terminal Device E164 = ~p~n", [E164_]),
 
             DevMoid    = binary_to_list(DevMoid_),
             DomainMoid = binary_to_list(DomainMoid_),
@@ -2543,6 +2571,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
 
             DevType_ = rfc4627:get_field(JsonObj, "devtype", undefined),
             DevType = binary_to_list(DevType_),
+            lager:info("  -->  Terminal Device Type (Msg) = ~p~n", [DevType_]),
 
             %% 通过 "eventid" 判定为信息类型
             case EventID of
@@ -2577,7 +2606,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                             lager:info("[TaskControl] 'SADD collector ~p' -- Success!~n", [CollectorID])
                     end,
 
-                    %% 向 Redis 表 collector:collectorid:online 中写入 devtype:devid 信息
+                    %% 向 Redis 表 collector:collectorid:online 中写入 devtype:devmoid 信息
                     case gen_server:call(RedisTask, {add_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, TerDevOnlineErr2} ->
                             lager:warning("[TaskControl] 'SADD collector:~p:online' -- Failed! Error '~p'~n", 
@@ -2646,7 +2675,7 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
                             lager:info("[TaskControl] 'DEL terminal:~p:runninginfo' -- Success!~n", [DevMoid])
                     end,
 
-                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devid 信息
+                    %% 从 Redis 表 collector:collectorid:online 中删除 devtype:devmoid 信息
                     case gen_server:call(RedisTask, {del_collector_online_device, CollectorID, DevMoid, DevType}, infinity) of
                         {error, TerDevOfflineErr5} ->
                             lager:warning("[TaskControl] 'SREM collector:~p:online' -- Failed! Error '~p'~n", 
@@ -3470,10 +3499,11 @@ terminal_device_proc(JsonObj, RedisTask, MySQLTask, Type) ->
             end;
 
         {error,<<"Key Error">>} ->
-            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p~n", [DevMoid]),
-            throw(redis_key_error);
+            lager:warning("[TaskControl] get <<\"Key Error\">> for key ~p, can do nothing!~n", 
+                [DevMoidFromMsg]);
+            %%throw(redis_key_error);
         {error, no_connection} ->
-            lager:error("[TaskControl] lost redis connection!"),
+            lager:error("[TaskControl] lost redis connection!~n", []),
             throw(redis_connection_lost)
     end.
 
@@ -3573,14 +3603,37 @@ msg_parser(JsonObj, #state{redis_task=RedisTask, mysql_task=MySQLTask}) ->
 %%--------------------------------------------------------------------------
 
 init([TRef, MQTask, RedisTask, MySQLTask]) ->
-    ok = nms_config:set_task_control(TRef, self()),
-    io:format("===>  nms_config:nms_task_control = [~p,~p]~n", [TRef, self()]),
-    {ok, #state{tref=TRef, mq_task=MQTask, redis_task=RedisTask, mysql_task=MySQLTask}}.
+    process_flag(trap_exit, true),
+
+    ok = nms_config:set_task_control(TRef, self()),    
+    lager:info("[TaskControl] init => set (TaskRef, TaskConPid) = (~p, ~p)~n", [TRef, self()]),
+
+    MQTaskPid = case MQTask of
+        none -> none;
+        _ -> nms_config:get_rabbitmq_task(TRef)
+    end,
+
+    RedisTaskPid = case RedisTask of
+        none -> none;
+        _ -> nms_config:get_redis_task(TRef)
+    end,
+
+    MySQLTaskPid = case MySQLTask of
+        none -> none;
+        _ -> nms_config:get_mysql_task(TRef)
+    end,
+    
+    lager:info("[TaskControl] init => [old] MQTask(~p) RedisTask(~p) MySQLTask(~p)~n", 
+        [MQTask, RedisTask, MySQLTask]),
+    lager:info("[TaskControl] init => [new] MQTask(~p) RedisTask(~p) MySQLTask(~p)~n", 
+        [MQTaskPid, RedisTaskPid, MySQLTaskPid]),
+
+    {ok, #state{tref=TRef, mq_task=MQTaskPid, redis_task=RedisTaskPid, mysql_task=MySQLTaskPid}}.
 
 handle_call( {do_consume, QueueN, ExchangeN, RoutingKey}, 
         _From, #state{mq_task=MQTask} = State) ->
     nms_rabbitmq_task:do_consume(MQTask, self(), QueueN, ExchangeN, RoutingKey),
-    lager:notice("[TaskControl] handle_call/3 Recv {do_consume, ~p, ~p, ~p}~n", 
+    lager:info("[TaskControl] handle_call => recv {do_consume, ~p, ~p, ~p}~n", 
         [QueueN, ExchangeN, RoutingKey]),
     {reply, ok, State};
 
@@ -3611,6 +3664,7 @@ handle_info( {#'basic.deliver'{}, Payload}, State) ->
 handle_info({timeout, TimerRef, {delete_collector_info, CollectorID}=Msg}, #state{redis_task=RedisTask} = State) ->
     lager:notice("######  Recv {timeout, ~p, ~p}", [TimerRef, Msg]),
 
+    %% 删除 Redis 的 SET 表 collector:collectorid:online 中各设备对应的 DevType:DevMoid:online 值
     %% 删除 Redis 的 SET 表 collector:collectorid:online
     case gen_server:call(RedisTask, {del_collector_online_device_all, CollectorID}, infinity) of
         {error, TimeOutErr0} ->
@@ -3640,10 +3694,16 @@ handle_info({timeout, TimerRef, {delete_collector_info, CollectorID}=Msg}, #stat
 
     {noreply, State};
 
+
+handle_info({'EXIT', Pid, {restart, From}}, State) ->
+    lager:warning("[TaskControl] recv {'EXIT', ~p, {restart, ~p}}~n", [Pid, From]),
+    {stop, need_to_restart, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(Reason, _State) ->
+    lager:warning("[TaskControl] terminate => Reason(~p)~n", [Reason]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->

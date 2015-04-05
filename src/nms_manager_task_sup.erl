@@ -41,8 +41,3 @@ init([]) ->
     {ok, {{simple_one_for_one, 0, 1}, 
           [{nms_task_sup, {nms_task_sup, start_link, []},
            temporary, infinity, supervisor, [nms_task_sup]}]}}.
-
-
-
-
-

@@ -229,7 +229,7 @@ get_server_cpu_limit_mysql(PoolId) ->
 	SQL = "SELECT s_cpu FROM resource_limit;",
 	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Value,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	lager:info("The Value is : ~p~n",[Value]),
+	lager:info("The Value is : ~w~n",[Value]),
 	Value.
 
 %% 获取服务器 CPU 阈值
@@ -287,7 +287,9 @@ update_server_mem_limit( RedisClient,Limit,PoolId ) ->
 %% 返回值 {ok, return_value()} | {error, no_connection}
 -spec get_server_mem_limit_redis(pid()) -> {ok, binary() | undefined} | {error, no_connection}.
 get_server_mem_limit_redis(RedisClient) ->
-	eredis:q(RedisClient,["GET","server_memory_limit"]).
+	%% Result = {ok, return_value()} | {error, Reason::binary() | no_connection}
+	Result = eredis:q(RedisClient,["GET","server_memory_limit"]),
+	Result.
 
 %% 从 MySQL 获取服务器 Mem 阈值
 -spec get_server_mem_limit_mysql(atom()) -> {ok,binary()}|{error,string()}.
@@ -295,7 +297,7 @@ get_server_mem_limit_mysql(PoolId) ->
 	SQL = "SELECT s_memory FROM resource_limit;",
 	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Value,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	lager:info("The Value is : ~p~n",[Value]),
+	lager:info("The Value is : ~w~n",[Value]),
 	Value.
 
 %% 获取服务器内存阈值
@@ -362,7 +364,7 @@ get_server_disk_limit_mysql(PoolId) ->
 	SQL = "SELECT s_disk FROM resource_limit;",
 	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Value,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	lager:debug("The Result is : ~p~n",[Value]),
+	lager:debug("The Result is : ~w~n",[Value]),
 	Value.
 
 %% 获取服务器 Disk 阈值
@@ -430,7 +432,7 @@ get_server_net_limit_mysql(PoolId) ->
 	SQL = "SELECT s_port FROM resource_limit;",
 	lager:info("The SQL is : ~p~n",[SQL]),
 	{result_packet,_,_,Value,_} = emysql:execute(PoolId,list_to_binary(SQL)),
-	lager:debug("The Result is : ~p~n",[Value]),
+	lager:debug("The Result is : ~w~n",[Value]),
 	Value.
 	
 %% 获取服务器 网口吞吐量 阈值
