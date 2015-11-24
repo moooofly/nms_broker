@@ -13,7 +13,6 @@
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 -module(nms_broker_sup).
-
 -behaviour(supervisor).
 
 %% API
@@ -29,7 +28,6 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-%% Ref -> 用于标识以 nms_manager_sup 作为根的监督树结构
 start_manager_sup(ChildSpec) ->
     supervisor:start_child(?MODULE, ChildSpec).
 

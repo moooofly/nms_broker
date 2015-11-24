@@ -406,7 +406,7 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info({'EXIT', Pid, Info}, #state{tref=TRef}=State) ->
+handle_info({'EXIT', Pid, Info}, State) ->
     lager:warning("[MySQLTask] recv {'EXIT', ~p, ~p}~n", [Pid, Info]),
     {noreply, State};
 

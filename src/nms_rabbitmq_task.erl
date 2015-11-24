@@ -59,10 +59,6 @@ stop(TaskPid) ->
 do_consume(TaskPid, TaskConPid, QueueN, ExchangeN, RoutingKey) ->
     gen_server:call(TaskPid, {do_consume, TaskConPid, QueueN, ExchangeN, RoutingKey}, infinity).
 
-%% for internal usage
-% do_consume(TaskPid, TaskConPid, #consumer_params{}=Consumer_params) ->
-%     gen_server:call(TaskPid, {do_consume, TaskConPid, Consumer_params}, infinity).
-
 
 %%--------------------------------------------------------------------------
 %% Plumbing

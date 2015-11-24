@@ -24,10 +24,8 @@
 
 -export([set_rabbitmq_task/2]).
 -export([get_rabbitmq_task/1]).
-
 -export([set_redis_task/2]).
 -export([get_redis_task/1]).
-
 -export([set_mysql_task/2]).
 -export([get_mysql_task/1]).
 
@@ -59,9 +57,14 @@ set_manager_control(Ref, Pid) ->
 
 -spec get_manager_control(nms_api:ref()) -> pid().
 get_manager_control(Ref) ->
-	P = ets:lookup_element(?TAB, {manager_control, Ref}, 2),
-	io:format("ets:lookup_element(~p) => ~p~n", [Ref, P]),
-	P.
+	case ets:member(?TAB,{manager_control, Ref}) of
+		true ->
+			P = ets:lookup_element(?TAB, {manager_control, Ref}, 2),
+			io:format("ets:lookup_element(~p) => ~p~n", [Ref, P]),
+			P;
+		false ->
+			undefined
+	end.
 
 -spec set_task_control(nms_api:ref(), pid()) -> ok.
 set_task_control(Ref, Pid) ->
@@ -70,9 +73,14 @@ set_task_control(Ref, Pid) ->
 
 -spec get_task_control(nms_api:ref()) -> pid().
 get_task_control(Ref) ->
-	P = ets:lookup_element(?TAB, {task_control, Ref}, 2),
-	io:format("ets:lookup_element(~p) => ~p~n", [Ref, P]),
-	P.
+	case ets:member(?TAB,{task_control, Ref}) of
+		true ->
+			P = ets:lookup_element(?TAB, {task_control, Ref}, 2),
+			io:format("ets:lookup_element(~p) => ~p~n", [Ref, P]),
+			P;
+		false ->
+			undefined
+	end.
 
 -spec set_rabbitmq_task(nms_api:ref(), pid()) -> ok.
 set_rabbitmq_task(Ref, Pid) ->
@@ -81,9 +89,13 @@ set_rabbitmq_task(Ref, Pid) ->
 
 -spec get_rabbitmq_task(nms_api:ref()) -> pid().
 get_rabbitmq_task(Ref) ->
-	P = ets:lookup_element(?TAB, {rabbitmq_task, Ref}, 2),
-	io:format("[nms_config] get rabbitmq task pid by Ref(~p) => ~p~n", [Ref, P]),
-	P.
+	case ets:member(?TAB,{rabbitmq_task, Ref}) of
+		true ->
+			P = ets:lookup_element(?TAB, {rabbitmq_task, Ref}, 2),
+			P;
+		false ->
+			undefined
+	end.
 
 -spec set_redis_task(nms_api:ref(), pid()) -> ok.
 set_redis_task(Ref, Pid) ->
@@ -92,9 +104,13 @@ set_redis_task(Ref, Pid) ->
 
 -spec get_redis_task(nms_api:ref()) -> pid().
 get_redis_task(Ref) ->
-	P = ets:lookup_element(?TAB, {redis_task, Ref}, 2),
-	io:format("[nms_config] get redis task pid by Ref(~p) => ~p~n", [Ref, P]),
-	P.
+	case ets:member(?TAB,{redis_task, Ref}) of
+		true ->
+			P = ets:lookup_element(?TAB, {redis_task, Ref}, 2),
+			P;
+		false ->
+			undefined
+	end.
 
 -spec set_mysql_task(nms_api:ref(), pid()) -> ok.
 set_mysql_task(Ref, Pid) ->
@@ -103,11 +119,13 @@ set_mysql_task(Ref, Pid) ->
 
 -spec get_mysql_task(nms_api:ref()) -> pid().
 get_mysql_task(Ref) ->
-	P = ets:lookup_element(?TAB, {mysql_task, Ref}, 2),
-	io:format("[nms_config] get mysql task pid by Ref(~p) => ~p~n", [Ref, P]),
-	P.
-
-
+	case ets:member(?TAB,{mysql_task, Ref}) of
+		true ->
+			P = ets:lookup_element(?TAB, {mysql_task, Ref}, 2),
+			P;
+		false ->
+			undefined
+	end.
 
 init([]) ->
 	Monitors1 = [{{erlang:monitor(process, Pid), Pid}, Ref} ||

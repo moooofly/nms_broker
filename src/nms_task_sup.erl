@@ -13,7 +13,6 @@
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 -module(nms_task_sup).
-
 -behaviour(supervisor).
 
 -export([start_link/4]).

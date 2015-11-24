@@ -108,7 +108,6 @@ handle_call( {add_xmpp_online_statistic, DomainMoid, OnlineNum}, _From, #state{r
             {reply, Result, State}
     end;
 
-
 handle_call( {del_meeting_terminal, ConfE164, TerminalE164}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 
         undefined ->
@@ -685,7 +684,6 @@ handle_call( {add_physical_server_online, DevGuid}, _From, #state{redis_con=Redi
             Result = physical_server_handler:add_physical_server_online(RedisCon,DevGuid),
             {reply, Result, State}
     end;
-
 
 handle_call( {del_logical_server_warning, DevGuid, WarningCode}, _From, #state{redis_con=RedisCon}=State ) ->
     case RedisCon of 

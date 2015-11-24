@@ -27,10 +27,10 @@
          handle_info/2]).
 
 -record(state, {
-    		tref       = undefined :: undefined | nms_api:ref(), 
-    		mq_task    = undefined,
-    		redis_task = undefined,
-    		mysql_task = undefined
+			tref       = undefined :: undefined | nms_api:ref(), 
+			mq_task    = undefined,
+			redis_task = undefined,
+			mysql_task = undefined
 	}).
 
 
