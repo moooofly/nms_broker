@@ -137,7 +137,7 @@ handle_call({do_consume, _TaskCon, QueueN, ExchangeN, RoutingKey},
     setup_bind(Channel, QueueN, ExchangeN, RoutingKey),
     setup_consumer(Channel, QueueN),
 
-    lager:info("[RabbitmqTask] Consumer Setup Success!~n"),
+    lager:info("[RabbitmqTask] Consumer Setup Success!"),
     {reply, ok, State};
 
 handle_call({do_consume, _TaskCon, #consumer_params{queue=QueueN,exchange=ExchangeN,routingkey=RoutingKey}=_}, 
@@ -150,7 +150,7 @@ handle_call({do_consume, _TaskCon, #consumer_params{queue=QueueN,exchange=Exchan
     setup_bind(Channel, QueueN, ExchangeN, RoutingKey),
     setup_consumer(Channel, QueueN),
 
-    lager:info("[RabbitmqTask] Consumer Setup Success!~n"),
+    lager:info("[RabbitmqTask] Consumer Setup Success!"),
     {reply, ok, State};
 
 handle_call(stop, _From, State) ->
@@ -194,7 +194,7 @@ handle_info(start_consume, #state{rabbit_chan=Channel, consumer_params=Params}=S
         list_to_binary(Params#consumer_params.routingkey)),
     setup_consumer(Channel, list_to_binary(Params#consumer_params.queue)),
 
-    lager:info("[RabbitmqTask] Create Consumer Success!~n"),
+    lager:info("[RabbitmqTask] Create Consumer Success!"),
     {noreply, State};
 
 
